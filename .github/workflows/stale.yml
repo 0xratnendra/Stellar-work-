@@ -14,6 +14,8 @@ on:
 
 permissions:
   issues: write
+  contents: read
+  pull-requests: write
 
 jobs:
   stale:
@@ -63,3 +65,15 @@ jobs:
           
           # Debug mode (set to true for testing)
           debug-only: false
+
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Weekly repo hygiene report
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name' > stale-branches.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weekly-hygiene-report
+          path: stale-branches.txt
