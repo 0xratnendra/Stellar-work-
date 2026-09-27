@@ -14,6 +14,7 @@ import {
   removeFromWhitelist,
   isWhitelistModeEnabled,
 } from "@/lib/contract";
+import AdminPanelSkeleton from "@/components/AdminPanelSkeleton";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import ErrorBanner from "@/components/ErrorBanner";
@@ -363,7 +364,7 @@ export default function AdminPage() {
     return (
       <section className="mx-auto max-w-3xl space-y-6">
         <h1 className="text-2xl font-semibold">Admin Panel</h1>
-        <p className="text-sm text-slate-600">Loading admin data...</p>
+        <AdminPanelSkeleton />
       </section>
     );
   }
