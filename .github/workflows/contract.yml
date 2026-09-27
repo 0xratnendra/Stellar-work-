@@ -51,6 +51,12 @@ jobs:
         working-directory: contracts/escrow/
         run: soroban contract build
 
+      - name: Record build provenance
+        working-directory: contracts/escrow/
+        run: |
+          { echo "commit=$GITHUB_SHA"; echo "toolchain=$(rustc --version)"; } > build-manifest.txt
+          sha256sum target/wasm32-unknown-unknown/release/escrow.wasm >> build-manifest.txt
+
       - name: Run tests
         working-directory: contracts/escrow/
         run: cargo test

@@ -298,6 +298,7 @@ export default function PostJobPage() {
   const [tokenAddress, setTokenAddress] = useState(
     process.env.NEXT_PUBLIC_NATIVE_TOKEN ?? "",
   );
+  const [termsAcknowledged, setTermsAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -1040,10 +1041,15 @@ export default function PostJobPage() {
           </div>
         )}
 
+        <label className="flex items-start gap-2 text-xs text-slate-600">
+          <input type="checkbox" checked={termsAcknowledged} onChange={(e) => setTermsAcknowledged(e.target.checked)} className="mt-0.5" />
+          I confirm the platform fee, payment token, deadline, and cancellation policy.
+        </label>
+
         <button
           type="submit"
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={submitting || estimating || rateLimit.isLimited}
+          disabled={!termsAcknowledged || submitting || estimating || rateLimit.isLimited}
           aria-busy={submitting || estimating}
         >
           {submitting

@@ -71,6 +71,7 @@ export const Navigation = memo(function Navigation() {
   const pathname = usePathname();
   const { wallet } = useWallet();
   const { unreadCount } = useMessaging();
+  const [notificationUnreadCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -216,6 +217,9 @@ export const Navigation = memo(function Navigation() {
 
           <VoiceNav />
           <NotificationInbox />
+          {notificationUnreadCount > 0 && (
+            <span className="rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white" aria-label={`${notificationUnreadCount} unread notifications`}>{notificationUnreadCount}</span>
+          )}
           <ThemeToggle />
           <LanguageSwitcher />
           <NetworkSwitcher />
