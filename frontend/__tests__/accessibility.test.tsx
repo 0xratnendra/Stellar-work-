@@ -11,6 +11,8 @@ import LoadingState from '../components/LoadingState';
 import NetworkBadge from '../components/NetworkBadge';
 import ErrorBanner from '../components/ErrorBanner';
 import StatusPill from '../components/StatusPill';
+import JobStatusTimeline from '../components/JobStatusTimeline';
+import MilestoneProgress from '../components/MilestoneProgress';
 
 /**
  * Accessibility test suite using axe-core via vitest-axe.
@@ -96,6 +98,51 @@ describe('Stellar-Specific Accessibility Patterns', () => {
   it('StatusPill conveys status without relying solely on color', async () => {
     const { container } = render(<StatusPill status="Completed" />);
     expect(container.textContent).toBeTruthy();
+    const results = await axe(container);
+    expect(results.violations).toEqual([]);
+  });
+
+  it('JobStatusTimeline has accessible name and steps order', async () => {
+    const sampleJob = {
+      client: "GXXXX",
+      freelancer: null,
+      amount: "10000000",
+      description_hash: "abc",
+      status: "InProgress" as const,
+      created_at: "1710000000",
+      deadline: "0",
+      token: "CAS3",
+      revision_count: 0,
+      submitted_at: "0",
+    };
+    const { getByRole, getAllByRole, container } = render(<JobStatusTimeline job={sampleJob} />);
+    expect(getByRole("region", { name: /Job status timeline/i })).toBeInDOM();
+    const steps = getAllByRole("listitem");
+    expect(steps.length).toBeGreaterThan(0);
+    const results = await axe(container);
+    expect(results.violations).toEqual([]);
+  });
+
+  it('MilestoneProgress has accessible progressbar and live region', async () => {
+    const mockMilestones = [
+      { id: 0, description_hash: "hash1", amount: "50000000", is_released: true },
+      { id: 1, description_hash: "hash2", amount: "50000000", is_released: false },
+    ];
+    const { getByRole, container } = render(
+      <MilestoneProgress
+        jobId="1"
+        milestones={mockMilestones}
+        wallet="GXXXX"
+        isInProgress={true}
+        onMilestoneApproved={() => {}}
+        onError={() => {}}
+        actionLoading={false}
+        setActionLoading={() => {}}
+      />
+    );
+    const progressbar = getByRole("progressbar");
+    expect(progressbar).toHaveAttribute("aria-valuenow", "50");
+    expect(progressbar).toHaveAttribute("aria-valuetext", "1 of 2 milestones released (50%)");
     const results = await axe(container);
     expect(results.violations).toEqual([]);
   });

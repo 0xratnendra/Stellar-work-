@@ -3,6 +3,7 @@
 import { approveMilestone } from "@/lib/contract";
 import { toXlm } from "@/lib/format";
 import type { Milestone } from "@/lib/types";
+import AriaLiveRegion from "@/components/AriaLiveRegion";
 
 interface MilestoneProgressProps {
   jobId: string;
@@ -44,6 +45,11 @@ export default function MilestoneProgress({
     .filter((m) => m.is_released)
     .reduce((acc, m) => acc + BigInt(m.amount), 0n);
 
+  const progressValueText = `${released} of ${total} milestones released (${pct}%)`;
+  const liveAnnouncement = released === total && total > 0 
+    ? `All ${total} milestones have been completed and released.`
+    : `${released} of ${total} milestones released.`;
+
   async function handleApprove(milestoneId: number) {
     if (!wallet) return;
     setActionLoading(true);
@@ -59,6 +65,7 @@ export default function MilestoneProgress({
 
   return (
     <section aria-labelledby="milestone-heading" className="space-y-4">
+      <AriaLiveRegion message={liveAnnouncement} politeness="polite" />
       <h2 id="milestone-heading" className="text-base font-semibold text-slate-900">
         Milestone Progress
       </h2>
@@ -77,6 +84,7 @@ export default function MilestoneProgress({
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
+          aria-valuetext={progressValueText}
           aria-label={`${pct}% of milestones released`}
         >
           <div
