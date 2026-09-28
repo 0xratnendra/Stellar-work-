@@ -50,6 +50,26 @@ const ARCHIVAL_JOB_BUMP_AMOUNT: u32 = 120_960;
 
 const ARCHIVE_THRESHOLD: u64 = 180 * 24 * 60 * 60;
 
+/// Issue #986: per-module contract pause. Each entrypoint that changes
+/// state is mapped to one module below; a future global emergency pause (if
+/// added elsewhere in this contract) remains a master switch layered on
+/// top of these. Deliberately NOT `#[contracttype]` (and not folded into
+/// `DataKey`) — this contract's spec metadata is already at Soroban's XDR
+/// size limit (`DataKey` alone has 76 variants), so a new key is stored via
+/// a plain tuple `(Symbol, u32)` instead of growing either enum.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum Module {
+    Jobs = 0,
+    Disputes = 1,
+    Payments = 2,
+    Admin = 3,
+}
+
+fn module_paused_key(e: &Env, module_code: u32) -> (Symbol, u32) {
+    (Symbol::new(e, "mod_pause"), module_code)
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JobStatus {
@@ -460,6 +480,8 @@ pub enum Error {
     BonusAlreadyClaimed = 53,
     /// SC-140: no onboarding bonus token/amount has been configured yet.
     BonusNotConfigured = 54,
+    /// Issue #986: the target module is currently paused.
+    ModulePaused = 53,
 }
 
 #[contract]
@@ -467,6 +489,40 @@ pub struct EscrowContract;
 
 #[contractimpl]
 impl EscrowContract {
+    /// Issue #986: pause a single module without blocking unrelated
+    /// functionality. Admin-only. `module` is one of the `Module` codes:
+    /// 0 = Jobs, 1 = Disputes, 2 = Payments, 3 = Admin.
+    pub fn pause_module(e: Env, admin: Address, module: u32) {
+        let stored_admin = load_admin(&e);
+        admin.require_auth();
+        if admin != stored_admin {
+            panic_with_error!(&e, Error::UnauthorizedAdmin);
+        }
+        let key = module_paused_key(&e, module);
+        e.storage().instance().set(&key, &true);
+        e.events()
+            .publish((Symbol::new(&e, "ModulePaused"),), module);
+    }
+
+    /// Issue #986: resume a previously-paused module. Admin-only.
+    pub fn resume_module(e: Env, admin: Address, module: u32) {
+        let stored_admin = load_admin(&e);
+        admin.require_auth();
+        if admin != stored_admin {
+            panic_with_error!(&e, Error::UnauthorizedAdmin);
+        }
+        let key = module_paused_key(&e, module);
+        e.storage().instance().set(&key, &false);
+        e.events()
+            .publish((Symbol::new(&e, "ModuleResumed"),), module);
+    }
+
+    /// Issue #986: read whether `module` is currently paused (see `Module` codes).
+    pub fn is_module_paused(e: Env, module: u32) -> bool {
+        let key = module_paused_key(&e, module);
+        e.storage().instance().get(&key).unwrap_or(false)
+    }
+
     pub fn get_audit_entry(e: Env, id: u64) -> Option<AuditEntry> {
         e.storage().persistent().get(&DataKey::AuditLog(id))
     }
@@ -1076,6 +1132,14 @@ impl EscrowContract {
     pub fn verify_attachments_root(e: Env, job_id: u64, expected: BytesN<32>) -> bool {
         get_job_or_panic(&e, job_id).attachments_root == expected
     }
+    fn require_module_active(e: &Env, module: Module) {
+        let key = module_paused_key(e, module as u32);
+        let paused: bool = e.storage().instance().get(&key).unwrap_or(false);
+        if paused {
+            panic_with_error!(e, Error::ModulePaused);
+        }
+    }
+
     pub fn initialize(e: Env, admin: Address, native_token: Address) {
         if e.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&e, Error::AlreadyInitialized);
@@ -1217,6 +1281,7 @@ impl EscrowContract {
         deadline: u64,
         token: Address,
     ) -> u64 {
+        Self::require_module_active(&e, Module::Jobs);
         let categories = Vec::new(&e);
         Self::post_job_with_categories(
             e,
@@ -1969,6 +2034,7 @@ impl EscrowContract {
     }
 
     pub fn raise_dispute(e: Env, caller: Address, job_id: u64) {
+        Self::require_module_active(&e, Module::Disputes);
         let mut job = get_job_or_panic(&e, job_id);
         caller.require_auth();
         require_active_access(&e, &caller);
@@ -2877,6 +2943,7 @@ impl EscrowContract {
     }
 
     pub fn withdraw_fees(e: Env, token: Address) {
+        Self::require_module_active(&e, Module::Payments);
         let admin = load_admin(&e);
         admin.require_auth();
 
@@ -5136,6 +5203,44 @@ mod test {
 
     fn hash(env: &Env) -> BytesN<32> {
         BytesN::from_array(env, &[7; 32])
+    }
+
+    // ==================== issue #986: per-module pause ====================
+
+    #[test]
+    fn module_pause_blocks_only_its_own_module() {
+        let (env, client, admin, user, _freelancer, native_token) = setup();
+
+        assert!(!client.is_module_paused(&0u32)); // Jobs
+
+        client.pause_module(&admin, &0u32); // Jobs
+        assert!(client.is_module_paused(&0u32));
+        // Payments (module 2) is unaffected by pausing Jobs.
+        assert!(!client.is_module_paused(&2u32));
+
+        let desc_hash = hash(&env);
+        let res = client.try_post_job(&user, &100_0000000i128, &desc_hash, &100u32, &0u64, &native_token);
+        assert!(res.is_err());
+
+        client.resume_module(&admin, &0u32);
+        assert!(!client.is_module_paused(&0u32));
+        let job_id = client.post_job(&user, &100_0000000i128, &desc_hash, &100u32, &0u64, &native_token);
+        assert_eq!(job_id, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #13)")]
+    fn pause_module_rejects_non_admin() {
+        let (_env, client, _admin, user, _freelancer, _native_token) = setup();
+        client.pause_module(&user, &0u32);
+    }
+
+    #[test]
+    fn pause_module_blocks_withdraw_fees() {
+        let (_env, client, admin, _user, _freelancer, native_token) = setup();
+        client.pause_module(&admin, &2u32); // Payments
+        let res = client.try_withdraw_fees(&native_token);
+        assert!(res.is_err());
     }
 
     #[test]

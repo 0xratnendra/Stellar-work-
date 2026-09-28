@@ -1,6 +1,6 @@
 "use client";
 
-import LoadingState from "@/components/LoadingState";
+import CompareTableSkeleton from "@/components/CompareTableSkeleton";
 import { getJob } from "@/lib/contract";
 import TruncatedAddress from "@/components/TruncatedAddress";
 import { formatDeadline, toXlm } from "@/lib/format";
@@ -50,6 +50,15 @@ export default function ComparePage() {
   const [entries, setEntries] = useState<JobEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Sizes the loading skeleton to the number of jobs actually requested,
+  // same slice/filter as the real ids parsing below, so it doesn't flash a
+  // different column count than what's about to render.
+  const requestedIdCount = (searchParams.get("ids") ?? "")
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !Number.isNaN(n) && n > 0)
+    .slice(0, 4).length;
 
   useEffect(() => {
     const idsParam = searchParams.get("ids");
@@ -118,7 +127,9 @@ export default function ComparePage() {
         </Link>
       </div>
 
-      {loading && <LoadingState text="Loading jobs…" />}
+      {loading && (
+        <CompareTableSkeleton columns={requestedIdCount || 2} />
+      )}
 
       {error && (
         <div
