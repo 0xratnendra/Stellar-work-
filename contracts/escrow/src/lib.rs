@@ -210,6 +210,40 @@ pub struct FeeTier {
     pub fee_bps: i128,
 }
 
+/// SC-153: the expected fee components for a given job amount, as returned
+/// by [`Escrow::estimate_fee`].
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeBreakdown {
+    pub amount: i128,
+    /// The platform fee rate applied (after fee-tier matching), in basis points.
+    pub platform_fee_bps: i128,
+    /// `amount * platform_fee_bps / BPS_DENOMINATOR`.
+    pub platform_fee: i128,
+    /// Share of `platform_fee` that is burned, in basis points.
+    pub burn_bps: i128,
+    /// `platform_fee * burn_bps / BPS_DENOMINATOR`.
+    pub burn_amount: i128,
+    /// The current dispute fee deposit amount (native token, in stroops);
+    /// only charged if a dispute is actually raised on the job.
+    pub dispute_fee: i128,
+    /// `amount - platform_fee`: what the freelancer would receive before
+    /// any late-fee deduction, which cannot be known ahead of settlement.
+    pub net_payout: i128,
+}
+
+/// SC-153: the currently configured fee parameters, as returned by
+/// [`Escrow::get_fee_config`].
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfig {
+    pub fee_bps: i128,
+    pub fee_tiers: Vec<FeeTier>,
+    pub burn_bps: i128,
+    pub dispute_fee: i128,
+    pub late_fee_bps: i128,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeResolution {
@@ -2884,6 +2918,49 @@ impl EscrowContract {
 
     pub fn get_fee_tier_count_view(e: Env) -> u32 {
         get_fee_tier_count(&e)
+    }
+
+    /// SC-153: return the expected fee breakdown for posting a job of
+    /// `amount` in `token`, using the currently configured fee tiers,
+    /// burn percentage, and dispute fee. Purely a read; posting the job
+    /// with `post_job` re-derives these values at settlement time, so this
+    /// is only a preview and can change if fee parameters are updated
+    /// before the job is completed.
+    pub fn estimate_fee(e: Env, amount: i128, token: Address) -> FeeBreakdown {
+        if amount <= 0 {
+            panic_with_error!(&e, Error::InvalidAmount);
+        }
+        // `token` is accepted for forward-compatibility with a future
+        // per-token fee schedule; the current fee parameters are global.
+        let _ = &token;
+
+        let platform_fee_bps = calculate_fee_for_amount(&e, amount);
+        let platform_fee = checked_mul_div(&e, amount, platform_fee_bps, BPS_DENOMINATOR);
+        let burn_bps = Self::get_burn_percentage(e.clone());
+        let burn_amount = checked_mul_div(&e, platform_fee, burn_bps, BPS_DENOMINATOR);
+        let dispute_fee = get_dispute_fee_storage(&e);
+        let net_payout = checked_sub(&e, amount, platform_fee);
+
+        FeeBreakdown {
+            amount,
+            platform_fee_bps,
+            platform_fee,
+            burn_bps,
+            burn_amount,
+            dispute_fee,
+            net_payout,
+        }
+    }
+
+    /// SC-153: return the current fee configuration parameters.
+    pub fn get_fee_config(e: Env) -> FeeConfig {
+        FeeConfig {
+            fee_bps: get_fee_bps_storage(&e),
+            fee_tiers: Self::get_fee_tiers(e.clone()),
+            burn_bps: Self::get_burn_percentage(e.clone()),
+            dispute_fee: get_dispute_fee_storage(&e),
+            late_fee_bps: Self::get_late_fee_bps(e.clone()),
+        }
     }
 
     pub fn set_max_jobs_per_user(e: Env, caller: Address, limit: u32) {
@@ -6261,6 +6338,74 @@ mod test {
         let (_, client, _, _, _, _) = setup();
         client.update_fee(&1_000i128);
         assert_eq!(client.get_fee_bps(), 1_000);
+    }
+
+    // --- SC-153: fee breakdown estimator tests ---
+
+    #[test]
+    fn estimate_fee_matches_default_fee_bps() {
+        let (_, client, _, _, _, native_token) = setup();
+        let amount = 1_000_000i128;
+        let breakdown = client.estimate_fee(&amount, &native_token);
+
+        assert_eq!(breakdown.amount, amount);
+        assert_eq!(breakdown.platform_fee_bps, 250);
+        assert_eq!(breakdown.platform_fee, amount * 250 / BPS_DENOMINATOR);
+        assert_eq!(
+            breakdown.net_payout,
+            amount - amount * 250 / BPS_DENOMINATOR
+        );
+        assert_eq!(breakdown.dispute_fee, DEFAULT_DISPUTE_FEE);
+    }
+
+    #[test]
+    fn estimate_fee_reflects_updated_fee_bps() {
+        let (_, client, _, _, _, native_token) = setup();
+        client.update_fee(&500i128);
+
+        let amount = 1_000_000i128;
+        let breakdown = client.estimate_fee(&amount, &native_token);
+
+        assert_eq!(breakdown.platform_fee_bps, 500);
+        assert_eq!(breakdown.platform_fee, amount * 500 / BPS_DENOMINATOR);
+    }
+
+    #[test]
+    fn estimate_fee_includes_burn_amount() {
+        let (env, client, admin, _, _, native_token) = setup();
+        client.update_burn_percentage(&admin, &2_000i128); // 20% of the fee is burned
+        let _ = env;
+
+        let amount = 1_000_000i128;
+        let breakdown = client.estimate_fee(&amount, &native_token);
+
+        let expected_fee = amount * 250 / BPS_DENOMINATOR;
+        let expected_burn = expected_fee * 2_000 / BPS_DENOMINATOR;
+        assert_eq!(breakdown.burn_bps, 2_000);
+        assert_eq!(breakdown.burn_amount, expected_burn);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #11)")]
+    fn estimate_fee_zero_amount_panics() {
+        let (_, client, _, _, _, native_token) = setup();
+        client.estimate_fee(&0i128, &native_token);
+    }
+
+    #[test]
+    fn get_fee_config_matches_individual_getters() {
+        let (_, client, admin, _, _, native_token) = setup();
+        client.update_fee(&500i128);
+        client.update_burn_percentage(&admin, &1_000i128);
+        let _ = native_token;
+
+        let config = client.get_fee_config();
+
+        assert_eq!(config.fee_bps, client.get_fee_bps());
+        assert_eq!(config.burn_bps, client.get_burn_percentage());
+        assert_eq!(config.dispute_fee, client.get_dispute_fee());
+        assert_eq!(config.late_fee_bps, client.get_late_fee_bps());
+        assert_eq!(config.fee_tiers.len(), client.get_fee_tiers().len());
     }
 
     #[test]
