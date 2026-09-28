@@ -366,3 +366,37 @@ html {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Print stylesheet for job detail pages (#991) ──────────────────────── */
+@media print {
+  nav,
+  footer,
+  [data-print-scope="job-detail"] button,
+  [data-print-scope="job-detail"] a[role="button"] {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  [data-print-scope="job-detail"] {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  [data-print-scope="job-detail"] * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: #999 !important;
+  }
+
+  [data-print-scope="job-detail"] a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    color: #555 !important;
+  }
+}

@@ -736,7 +736,7 @@ useEffect(() => {
   }
 
   return (
-    <section className="space-y-6 pb-6 sm:pb-6">
+    <section className="space-y-6 pb-6 sm:pb-6" data-print-scope="job-detail">
       {/* Screen reader announcer for job status transitions */}
       <p aria-live="polite" aria-atomic="true" className="sr-only">
         {statusAnnouncement}
