@@ -383,6 +383,12 @@ pub enum ExtKey {
     /// SC-138: maps a job metadata hash to the IPFS CID v1 string of the
     /// off-chain metadata document it corresponds to.
     MetadataCidMapping(BytesN<32>),
+    /// SC-140: onboarding bonus amount, per unit of the configured token.
+    OnboardingBonusAmount,
+    /// SC-140: onboarding bonus payout token.
+    OnboardingBonusToken,
+    /// SC-140: whether `freelancer` has already claimed the onboarding bonus.
+    OnboardingBonusClaimed(Address),
     // SC-137: emergency fund recovery for stuck escrows
     /// Recovery proposal by id.
     RecoveryProposal(u64),
@@ -470,6 +476,10 @@ pub enum Error {
     /// SC-138: a metadata hash must be non-zero to be stored on a job.
     InvalidMetadataHash = 51,
     InvalidCategory = 52,
+    /// SC-140: onboarding bonus already claimed by this freelancer.
+    BonusAlreadyClaimed = 53,
+    /// SC-140: no onboarding bonus token/amount has been configured yet.
+    BonusNotConfigured = 54,
     /// Issue #986: the target module is currently paused.
     ModulePaused = 53,
 }
@@ -710,6 +720,104 @@ impl EscrowContract {
         let job = get_job_or_panic(&e, job_id);
         job.freelancer
             .map(|f| Self::is_freelancer_verified(e.clone(), f))
+    }
+
+    // ── SC-140: onboarding bonus for newly verified freelancers ──────────────
+
+    /// Configure the onboarding bonus payout. Admin only.
+    ///
+    /// `amount` must be positive. Re-calling updates the amount/token for
+    /// future claims; freelancers who already claimed are unaffected.
+    pub fn set_onboarding_bonus(e: Env, caller: Address, token: Address, amount: i128) {
+        caller.require_auth();
+        let admin = load_admin(&e);
+        if caller != admin {
+            panic_with_error!(&e, Error::UnauthorizedAdmin);
+        }
+        if amount <= 0 {
+            panic_with_error!(&e, Error::InvalidAmount);
+        }
+
+        e.storage()
+            .instance()
+            .set(&ExtKey::OnboardingBonusAmount, &amount);
+        e.storage()
+            .instance()
+            .set(&ExtKey::OnboardingBonusToken, &token);
+        bump_instance_ttl(&e);
+
+        e.events().publish(
+            (Symbol::new(&e, "onboarding_bonus_set"),),
+            (token, amount),
+        );
+        Self::write_audit(&e, caller, "set_onboarding_bonus", None, "Set onboarding bonus");
+    }
+
+    /// Claim the one-time onboarding bonus. Caller must be a verified
+    /// freelancer (SC-120) who has not claimed it before.
+    ///
+    /// Marks the claim before transferring, so a reentrant/duplicate call in
+    /// the same transaction cannot double-pay (same ordering as other payout
+    /// paths in this contract).
+    pub fn claim_onboarding_bonus(e: Env, freelancer: Address) {
+        freelancer.require_auth();
+
+        if !Self::is_freelancer_verified(e.clone(), freelancer.clone()) {
+            panic_with_error!(&e, Error::Unauthorized);
+        }
+
+        let claimed_key = ExtKey::OnboardingBonusClaimed(freelancer.clone());
+        if e
+            .storage()
+            .persistent()
+            .get::<_, bool>(&claimed_key)
+            .unwrap_or(false)
+        {
+            panic_with_error!(&e, Error::BonusAlreadyClaimed);
+        }
+
+        let amount: i128 = e
+            .storage()
+            .instance()
+            .get(&ExtKey::OnboardingBonusAmount)
+            .unwrap_or(0);
+        let token: Option<Address> = e.storage().instance().get(&ExtKey::OnboardingBonusToken);
+        let (token, amount) = match (token, amount) {
+            (Some(t), a) if a > 0 => (t, a),
+            _ => panic_with_error!(&e, Error::BonusNotConfigured),
+        };
+
+        e.storage().persistent().set(&claimed_key, &true);
+        e.storage().persistent().extend_ttl(
+            &claimed_key,
+            ACTIVE_JOB_LIFETIME_THRESHOLD,
+            INSTANCE_BUMP_AMOUNT,
+        );
+        bump_instance_ttl(&e);
+
+        let token_client = token::Client::new(&e, &token);
+        token_client.transfer(&e.current_contract_address(), &freelancer, &amount);
+
+        e.events().publish(
+            (Symbol::new(&e, "onboarding_bonus_claimed"),),
+            (freelancer.clone(), amount),
+        );
+        Self::record_event(&e, "onboarding_bonus_claimed", 0, &freelancer);
+        Self::write_audit(
+            &e,
+            freelancer,
+            "claim_onboarding_bonus",
+            None,
+            "Claimed onboarding bonus",
+        );
+    }
+
+    /// Whether `freelancer` has already claimed the onboarding bonus.
+    pub fn has_claimed_onboarding_bonus(e: Env, freelancer: Address) -> bool {
+        e.storage()
+            .persistent()
+            .get(&ExtKey::OnboardingBonusClaimed(freelancer))
+            .unwrap_or(false)
     }
 
     // ── SC-130: multi-approver admin and helpers ───────────────────────────
