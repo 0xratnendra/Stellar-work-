@@ -70,8 +70,11 @@ CONTRACT_ID=$(soroban contract deploy \
   --network "$NETWORK" 2>&1)
 echo "  Contract ID: $CONTRACT_ID"
 
+WASM_HASH=$(sha256sum "$WASM_PATH" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$WASM_PATH" 2>/dev/null | cut -d' ' -f1 || echo "")
+DEPLOYING_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+
 echo ""
-echo "[4/5] Saving contract address..."
+echo "[4/5] Saving contract address to registry..."
 if [[ ! -f "$ADDRESSES_FILE" ]]; then
   echo '{}' > "$ADDRESSES_FILE"
 fi
@@ -80,11 +83,17 @@ const fs = require('fs');
 const data = JSON.parse(fs.readFileSync('$ADDRESSES_FILE', 'utf8'));
 data['$NETWORK'] = data['$NETWORK'] || {};
 data['$NETWORK'].contractId = '$CONTRACT_ID';
+data['$NETWORK'].wasmHash = '$WASM_HASH';
+data['$NETWORK'].deployingCommit = '$DEPLOYING_COMMIT';
+data['$NETWORK'].admin = '$ADMIN_ADDRESS' || data['$NETWORK'].admin || '';
+data['$NETWORK'].nativeToken = '$NATIVE_TOKEN' || data['$NETWORK'].nativeToken || '';
 data['$NETWORK'].deployedAt = new Date().toISOString();
 data['$NETWORK'].source = '$SOURCE_IDENTITY';
 fs.writeFileSync('$ADDRESSES_FILE', JSON.stringify(data, null, 2) + '\n');
 "
-echo "  Address saved to $ADDRESSES_FILE"
+echo "  Validating updated registry..."
+node "$PROJECT_DIR/scripts/validate-registry.js"
+echo "  Address and WASM hash saved to $ADDRESSES_FILE"
 
 echo ""
 echo "[5/5] Saving environment file..."
