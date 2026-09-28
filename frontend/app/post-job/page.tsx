@@ -286,7 +286,7 @@ import { sha256Hex, htmlToPlainText } from "@/lib/crypto";
 
 export default function PostJobPage() {
   const router = useRouter();
-  const { wallet, connectWallet } = useWallet();
+  const { wallet, walletNetwork, connectWallet } = useWallet();
   const [amount, setAmount] = useState("");
   const [bonusAmount, setBonusAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -394,6 +394,14 @@ export default function PostJobPage() {
       setHasDraft(true);
     }
   }, [wallet]);
+
+  // BUG-28: token addresses differ per network, so drop a stale one on switch.
+  const prevNetworkRef = useRef(walletNetwork);
+  useEffect(() => {
+    if (prevNetworkRef.current === walletNetwork) return;
+    prevNetworkRef.current = walletNetwork;
+    setTokenAddress(process.env.NEXT_PUBLIC_NATIVE_TOKEN ?? "");
+  }, [walletNetwork]);
 
   useEffect(() => {
     if (!wallet) {

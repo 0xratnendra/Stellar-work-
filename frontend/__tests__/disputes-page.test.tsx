@@ -69,4 +69,24 @@ describe("Disputes page loading state", () => {
     );
     expect(mockLoadDisputesPageData).toHaveBeenCalledTimes(2);
   });
+
+  // TEST-27: status filter chips plus the no-results empty state.
+  it("filters disputes by status and shows the no-match empty state", async () => {
+    mockLoadDisputesPageData.mockResolvedValue({
+      disputes: [
+        { id: "D-001", jobId: "J-104", jobTitle: "Audit", client: "Client", freelancer: "Freelancer", amount: 100, raisedBy: "client", raisedAt: "2025-04-18T09:22:00Z", status: "Active", reason: "Test" },
+      ],
+      eligibleJobs: [],
+    });
+
+    render(<ToastProvider><DisputesPage /></ToastProvider>);
+    await waitFor(() => expect(screen.getByText("Audit")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /resolved/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/no disputes match this filter/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Audit")).not.toBeInTheDocument();
+  });
 });
