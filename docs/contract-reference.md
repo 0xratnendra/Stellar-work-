@@ -1,6 +1,6 @@
 # Contract Function Quick Reference
 
-This document provides a quick reference for the `EscrowContract` methods, expected states, and input/output parameters.
+This document provides a quick reference for the `EscrowContract` methods, expected states, and input/output parameters. For complete type mappings, unit conversions, and frontend representations, see the [Data Dictionary](file:///C:/Users/JUST%20J/repos/Stellar-work-/docs/DATA_DICTIONARY.md).
 
 ## Core Lifecycle Methods
 

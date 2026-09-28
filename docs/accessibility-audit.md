@@ -9,7 +9,18 @@ each one regressing.
 
 ---
 
-## How this is checked
+## Baseline & Blocking CI Enforcement
+
+Accessibility violations are enforced as a **blocking CI check**. New accessibility violations beyond the committed baseline will fail the CI build.
+
+### Baseline Management Protocol
+
+- **Committed Baseline File**: `frontend/a11y-baseline.json` tracks pre-existing accessibility issues.
+- **Reporting Delta Only**: The CI runner executes `frontend/scripts/check-a11y-baseline.mjs`, reporting only unbaselined delta violations to keep logs actionable.
+- **Accessible Artifact**: Every run publishes `accessibility-baseline-report` containing `a11y-report.html`.
+- **Baselining Known Issues**: To add a known temporary issue to the baseline, update `frontend/a11y-baseline.json` with explicit justification and target issue link.
+- **Removing Fixed Entries**: When an accessibility bug is resolved, its entry **must** be removed from `a11y-baseline.json` so it cannot regress.
+- **Strict PR Review Policy**: Any PR modifying `a11y-baseline.json` requires explicit review by an Accessibility Owner to prevent using the baseline file to hide new regressions.
 
 | Layer | What it catches | Where |
 | --- | --- | --- |

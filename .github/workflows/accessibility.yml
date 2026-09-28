@@ -42,6 +42,19 @@ jobs:
       - name: Run accessibility tests
         run: npx vitest run accessibility.test.tsx --reporter=verbose
 
+      - name: Verify Accessibility Baseline (Blocking Check)
+        run: node scripts/check-a11y-baseline.mjs
+
+      - name: Upload Accessible Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-baseline-report
+          path: |
+            frontend/a11y-report.html
+            frontend/a11y-report.json
+          retention-days: 30
+
   critical-flows:
     name: Critical flow screen-reader checks
     runs-on: ubuntu-latest

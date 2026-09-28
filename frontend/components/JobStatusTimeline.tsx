@@ -46,13 +46,19 @@ export default function JobStatusTimeline({ job }: JobStatusTimelineProps) {
     timestamps["SubmittedForReview"] = Number(job.submitted_at) * 1000;
   }
 
+  const currentDisplayStatus = currentStatus === "InProgress" ? "In Progress" : currentStatus === "SubmittedForReview" ? "Submitted for Review" : currentStatus;
+
   return (
-    <div className="w-full py-6 px-4">
-      <div className="flex items-center justify-between relative max-w-2xl mx-auto">
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 rounded"></div>
+    <section 
+      aria-label={`Job status timeline: currently ${currentDisplayStatus}`}
+      className="w-full py-6 px-4"
+    >
+      <ol aria-label="Job status timeline steps" className="flex items-center justify-between relative max-w-2xl mx-auto list-none p-0">
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 rounded" aria-hidden="true"></div>
         <div 
           className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-blue-500 rounded transition-all duration-500"
           style={{ width: `${(activeIndex / (flow.length - 1)) * 100}%` }}
+          aria-hidden="true"
         ></div>
 
         {flow.map((status, index) => {
@@ -88,18 +94,23 @@ export default function JobStatusTimeline({ job }: JobStatusTimelineProps) {
           if (status === "InProgress") displayStatus = "In Progress";
           if (status === "SubmittedForReview") displayStatus = "Review";
 
+          const stepLabel = `${displayStatus} - ${isCurrent ? "Current step" : isPast ? "Completed step" : "Upcoming step"}${timeSpent ? `, time spent: ${timeSpent}` : ""}`;
+
           return (
-            <Tooltip key={status} content={tooltipContent} placement="top">
-              <div className="relative flex flex-col items-center group cursor-help">
-                <div className={`w-5 h-5 rounded-full border-2 z-10 transition-colors duration-300 ${bgColor}`} />
-                <div className={`absolute top-8 whitespace-nowrap text-xs font-medium transition-colors duration-300 ${isCurrent ? 'text-blue-700' : isPast ? 'text-slate-700' : 'text-slate-400'}`}>
-                  {displayStatus}
+            <li key={status} aria-current={isCurrent ? "step" : undefined} className="relative z-10">
+              <Tooltip content={tooltipContent} placement="top">
+                <div className="relative flex flex-col items-center group cursor-help" aria-label={stepLabel}>
+                  <div className={`w-5 h-5 rounded-full border-2 z-10 transition-colors duration-300 ${bgColor}`} />
+                  <div className={`absolute top-8 whitespace-nowrap text-xs font-medium transition-colors duration-300 ${isCurrent ? 'text-blue-700' : isPast ? 'text-slate-700' : 'text-slate-400'}`}>
+                    {displayStatus}
+                  </div>
+                  <span className="sr-only">{stepLabel}</span>
                 </div>
-              </div>
-            </Tooltip>
+              </Tooltip>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ol>
+    </section>
   );
 }

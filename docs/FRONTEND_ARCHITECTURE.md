@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-This document describes the StellarWork frontend architecture, component hierarchy, data flow, and integration patterns.
+This document describes the StellarWork frontend architecture, component hierarchy, data flow, and integration patterns. For contract-to-frontend field mappings and data encodings, refer to the [Data Dictionary](file:///C:/Users/JUST%20J/repos/Stellar-work-/docs/DATA_DICTIONARY.md).
 
 ## Tech Stack
 
