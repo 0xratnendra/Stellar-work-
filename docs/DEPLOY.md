@@ -194,12 +194,3 @@ This pulls the exact environment variables from Vercel's Preview environment int
 
 ---
 
-## Troubleshooting
-
-| Issue | Likely cause | Fix |
-|---|---|---|
-| Build fails with "NEXT_PUBLIC_CONTRACT_ID is not configured" | Missing env var on Vercel | Add `NEXT_PUBLIC_CONTRACT_ID` in Vercel Dashboard → Settings → Environment Variables |
-| Preview comment not posted | Missing `GITHUB_TOKEN` permissions | Ensure the workflow has `pull-requests: write` (added by default for org repos) |
-| Wrong network in preview | Environment variable scope | Check that `NEXT_PUBLIC_NETWORK=testnet` is scoped to **Preview** only |
-| `VERCEL_PROJECT_ID` not found | Project not linked | Run `vercel link` inside `frontend/` and re-read `project.json` |
-| Deployment queued but not triggered | Paths filter | The workflows only trigger on `frontend/**` changes. Push a change inside that folder. |
