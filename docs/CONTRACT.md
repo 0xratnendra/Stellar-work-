@@ -220,24 +220,7 @@ Both parties agree to cancel with a custom split. Transitions to `Cancelled`.
 
 **Event:** `job_mutually_cancelled` — data: `(job_id, client, freelancer, client_share, freelancer_share)`
 
----
 
-### Dispute Functions
-
-#### `raise_dispute(caller: Address, job_id: u64)`
-
-Either party raises a dispute. Transitions from `InProgress` or `SubmittedForReview` to `Disputed`.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `caller` | `Address` | Must be the client or freelancer. Must authorize. |
-| `job_id` | `u64` | ID of the job. |
-
-**Errors:** `JobNotFound` (1), `InvalidStatus` (3), `Unauthorized` (2)
-
-**Event:** `job_disputed` — data: `(job_id, caller)`
-
----
 
 #### `resolve_dispute(job_id: u64, resolution: DisputeResolution)`
 
@@ -388,15 +371,7 @@ see the [Smart Contract Upgrade and Migration Runbook](contract-upgrade-runbook.
 Contract error variants and the messages the interface should show for them are
 catalogued in [Contract Errors -> User-Facing Messages](contract-error-messages.md).
 
-## Token Whitelist
 
-The contract maintains a whitelist of allowed token addresses. Only whitelisted tokens can be used for job payments.
-
-- The `native_token` passed to `initialize` is automatically whitelisted.
-- Admin can add tokens via `add_allowed_token(token)`.
-- Admin can remove tokens via `remove_allowed_token(token)`.
-- `post_job` validates the token is whitelisted before accepting payment.
-- Each job stores its token address for use during payout.
 
 ## Storage TTL Management
 
