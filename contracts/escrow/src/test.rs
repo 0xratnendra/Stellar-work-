@@ -2749,3 +2749,25 @@ fn test_get_certificates_pagination() {
     let page3 = escrow.get_certificates(&freelancer, &4u64, &2u64);
     assert_eq!(page3.len(), 1);
 }
+
+#[test]
+fn test_two_step_admin_ownership_handover() {
+    let env = Env::default();
+    let (admin, _client, _freelancer, _token, contract_id) = setup_test(&env);
+    let escrow = new_escrow(&env, &contract_id);
+    let new_admin = Address::generate(&env);
+
+    // Step 1: nomination leaves the active admin in place.
+    escrow.transfer_ownership(&admin, &new_admin);
+    assert_eq!(escrow.get_admin(), admin, "Active admin must not change before accept");
+    assert_eq!(escrow.get_pending_admin(), Some(new_admin.clone()), "Pending admin must be readable while in flight");
+
+    // Step 2: only the nominee can complete the handover.
+    escrow.accept_ownership(&new_admin);
+    assert_eq!(escrow.get_admin(), new_admin, "Pending admin becomes active");
+    assert_eq!(escrow.get_pending_admin(), None, "Pending admin cleared after accept");
+
+    // A completed handover cannot be replayed, and the old admin loses access.
+    assert!(escrow.try_accept_ownership(&admin).is_err(), "Old admin cannot accept a second time");
+    assert!(escrow.try_set_required_approvals(&admin, &1u32).is_err(), "Old admin lost access");
+}
