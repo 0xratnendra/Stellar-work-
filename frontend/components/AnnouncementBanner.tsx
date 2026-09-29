@@ -25,12 +25,12 @@ export default function AnnouncementBanner() {
         if (raw) {
           const parsed = JSON.parse(raw) as AnnouncementConfig;
           if (parsed.enabled) {
-            // Check TTL
+           
             if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
               setIsVisible(false);
               return;
             }
-            // Check if dismissed
+           
             const dismissedRaw = localStorage.getItem(DISMISSED_STORAGE_KEY);
             let dismissedIds: string[] = [];
             if (dismissedRaw) {
@@ -62,7 +62,7 @@ export default function AnnouncementBanner() {
       }
     });
 
-    // Custom event for same-tab updates
+    
     const handleUpdate = () => loadAnnouncement();
     window.addEventListener("stellarwork:announcement-updated", handleUpdate);
     
