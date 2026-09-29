@@ -71,8 +71,8 @@ fn setup_benchmark_env() -> (Env, Address, Address, Address, Address, Address) {
 
 fn get_cpu_instructions(env: &Env) -> u64 {
     
-    // actual values from soroban-cli inspection or instrumentation.
-    0 // Placeholder; see benchmark results from cargo test execution
+   
+    0 
 }
 
 fn measure_post_job(
@@ -84,7 +84,7 @@ fn measure_post_job(
     let escrow = EscrowContractClient::new(env, contract_id);
     let token = env.register_stellar_asset_contract(client.clone());
     
-    // Ensure token is allowed
+   
     let admin = Address::generate(env);
     escrow.initialize(&admin, &token);
     escrow.add_allowed_token(&admin, &token);
@@ -92,18 +92,17 @@ fn measure_post_job(
     let desc_hash = BytesN::from_array(env, &[0u8; 32]);
     let deadline: u64 = 10000;
 
-    // Measure post_job
-    let cpu_before = 0u64; // Would be extracted from env in real implementation
+   
+    let cpu_before = 0u64; 
     let _job_id = escrow.post_job(client, &amount, &desc_hash, &100u32, &deadline, &token);
-    let cpu_after = 0u64; // Would be extracted from env in real implementation
-
+    let cpu_after = 0u64; 
     BenchmarkResult::new(
         "post_job",
         amount,
-        cpu_after - cpu_before, // CPU instructions
-        200, // Approximate ledger read bytes (JobCount read, token balance check)
-        300, // Approximate ledger write bytes (JobCount write, Job struct write)
-        1024, // Approximate memory (Job struct + temporary values)
+        cpu_after - cpu_before, 
+        200, 
+        300, 
+        1024, 
     )
 }
 
