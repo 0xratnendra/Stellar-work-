@@ -16,7 +16,9 @@
     "noResults": "Sin resultados",
     "export": "Exportar",
     "exportCSV": "Exportar CSV",
-    "exportJSON": "Exportar JSON"
+    "exportJSON": "Exportar JSON",
+    "close": "Cerrar",
+    "dismissNotification": "Descartar notificación"
   },
   "nav": {
     "jobs": "Trabajos",
@@ -25,9 +27,11 @@
     "transactions": "Transacciones",
     "disputes": "Disputas",
     "messages": "Mensajes",
+    "meetings": "Reuniones",
     "admin": "Admin",
     "profile": "Perfil",
     "toggleMenu": "Alternar menú de navegación",
+    "mainNavigation": "Navegación principal",
     "cmdK": "⌘K"
   },
   "home": {
@@ -93,7 +97,26 @@
     "switchAccount": "Cambiar Cuenta",
     "connecting": "Conectando...",
     "notInstalled": "Billetera Freighter no detectada",
-    "installFreighter": "Instalar Freighter"
+    "installFreighter": "Instalar Freighter",
+    "menuLabel": "Menú de billetera — conectado como {address}",
+    "optionsLabel": "Opciones de billetera",
+    "connectedAccount": "Cuenta conectada",
+    "copyAddressAria": "Copiar dirección de billetera al portapapeles",
+    "disconnectWallet": "Desconectar billetera",
+    "switching": "Cambiando...",
+    "switchAccountTitle": "¿Cambiar de cuenta?",
+    "switchAccountDescription": "Freighter te pedirá seleccionar otra cuenta. Se borrará la caché de trabajos y se actualizarán los datos de la nueva cuenta.",
+    "yesSwitch": "Sí, cambiar",
+    "disconnectTitle": "¿Desconectar billetera?",
+    "disconnectDescription": "Al desconectar, se quitará esta billetera de la aplicación. Las acciones de trabajo se ocultarán hasta que vuelvas a conectarte.",
+    "disconnectConsequenceSaved": "Se conservarán los marcadores y las preferencias guardados en este navegador.",
+    "disconnectConsequenceReconnect": "Puedes volver a conectarte en cualquier momento con el botón Conectar billetera.",
+    "yesDisconnect": "Sí, desconectar",
+    "refreshBalance": "Actualizar saldo",
+    "showFullAddress": "Mostrar dirección completa de la billetera",
+    "showShortAddress": "Mostrar dirección abreviada de la billetera",
+    "showFull": "Mostrar completa",
+    "showShort": "Mostrar abreviada"
   },
   "transactions": {
     "title": "Transacciones",
@@ -127,7 +150,14 @@
   "footer": {
     "github": "GitHub",
     "documentation": "Documentación",
-    "license": "Licencia"
+    "license": "Licencia",
+    "tokenomics": "Tokenómica",
+    "terms": "Términos",
+    "privacy": "Privacidad",
+    "buildTime": "Hora de compilación",
+    "commit": "Commit",
+    "environment": "Entorno",
+    "appVersion": "Versión de la aplicación {version}, entorno {environment}{commit}"
   },
   "theme": {
     "light": "Modo claro",

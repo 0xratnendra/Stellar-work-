@@ -31,7 +31,13 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 const AUTO_DISMISS_MS = 5000;
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({
+  children,
+  messages = { close: "Close", dismissNotification: "Dismiss notification" },
+}: {
+  children: ReactNode;
+  messages?: { close: string; dismissNotification: string };
+}) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const idPrefix = useId();
@@ -122,9 +128,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => dismiss(toast.id)}
               className="shrink-0 rounded-md px-1.5 py-0.5 text-xs font-semibold hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-              aria-label="Dismiss notification"
+              aria-label={messages.dismissNotification}
             >
-              Close
+              {messages.close}
             </button>
           </div>
         ))}

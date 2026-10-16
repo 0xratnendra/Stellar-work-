@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages } from "next-intl/server";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { WalletProvider } from "@/lib/wallet-context";
 import { ToastProvider } from "@/components/ToastProvider";
 import { NotificationProvider } from "@/lib/notifications-context";
@@ -169,6 +169,21 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
+  const common = await getTranslations("common");
+  const footer = await getTranslations("footer");
+  const footerMessages = {
+    siteTagline: common("siteTagline"),
+    github: footer("github"),
+    documentation: footer("documentation"),
+    tokenomics: footer("tokenomics"),
+    license: footer("license"),
+    builtOn: common("builtOn"),
+    allRightsReserved: common("allRightsReserved"),
+    buildTime: footer("buildTime"),
+    commit: footer("commit"),
+    environment: footer("environment"),
+    appVersion: footer("appVersion"),
+  };
 
   return (
     <html
@@ -200,12 +215,17 @@ export default async function RootLayout({
                   <NotificationProvider>
                     <MessagingProvider>
                       <MeetingsProvider>
-                        <ToastProvider>
+                        <ToastProvider
+                          messages={{
+                            close: common("close"),
+                            dismissNotification: common("dismissNotification"),
+                          }}
+                        >
                           <a
                             href="#main-content"
                             className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-slate-900 focus:outline-none dark:focus:bg-slate-800 dark:focus:text-slate-100"
                           >
-                            Skip to main content
+                            {common("skipToContent")}
                           </a>
                           <DeferredClientFeatures />
                           <ClientProviders>
@@ -240,13 +260,13 @@ export default async function RootLayout({
                                       rel="noopener noreferrer"
                                       className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                                     >
-                                      GitHub
+                                      {footer("github")}
                                     </a>
                                     <Link
                                       href="/docs"
                                       className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                                     >
-                                      Documentation
+                                      {footer("documentation")}
                                     </Link>
                                     <a
                                       href="/LICENSE"
@@ -254,25 +274,25 @@ export default async function RootLayout({
                                       rel="noopener noreferrer"
                                       className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                                     >
-                                      License
+                                      {footer("license")}
                                     </a>
                                     <Link
                                       href="/legal/terms"
                                       className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                                     >
-                                      Terms
+                                      {footer("terms")}
                                     </Link>
                                     <Link
                                       href="/legal/privacy"
                                       className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                                     >
-                                      Privacy
+                                      {footer("privacy")}
                                     </Link>
                                   </nav>
 
                                   <div className="flex items-center gap-2 rounded-full border border-slate-100 bg-slate-50 px-4 py-2 dark:border-slate-800 dark:bg-slate-800">
                                     <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                      Built on
+                                      {common("builtOn")}
                                     </span>
                                     <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
                                       Stellar
@@ -280,11 +300,11 @@ export default async function RootLayout({
                                   </div>
                                 </div>
                                 <div className="mt-8 border-t border-slate-100 pt-8 text-center text-xs text-slate-400 dark:border-slate-800">
-                                  &copy; {new Date().getFullYear()} StellarWork. All rights reserved.
+                                  &copy; {new Date().getFullYear()} {common("allRightsReserved")}
                                 </div>
                               </div>
                             </footer>
-                            <AppFooter />
+                            <AppFooter messages={footerMessages} />
                           </ClientProviders>
                         </ToastProvider>
                       </MeetingsProvider>
