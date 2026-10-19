@@ -144,6 +144,11 @@ Values are estimates from local `soroban contract invoke` dry-runs against a sta
 | `ClientReferrer(addr)` | Address | Client → referrer |
 | `ReferralBonusPaid(addr)` | bool | One-time bonus flag |
 
+The deprecated whitelist aliases delegate to the canonical allowlist entrypoints
+and use the same `AllowedToken(token)` storage key. Existing deployed state is
+preserved without migration; keep the aliases available for integrations that
+still invoke them.
+
 ## TTL Bump Strategy
 
 | Category | Threshold | Bump Amount |
