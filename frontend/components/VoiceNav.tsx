@@ -85,13 +85,14 @@ function getSpeechRecognition(): (new () => SpeechRecognition) | null {
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
 }
 
-export default function VoiceNav() {
+export default function VoiceNav({ autoStart = false }: { autoStart?: boolean }) {
   const router = useRouter();
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const autoStartRef = useRef(false);
   const statusTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -152,6 +153,13 @@ export default function VoiceNav() {
     setError(null);
     setLastCommand(null);
   }, [router, clearStatus]);
+
+  useEffect(() => {
+    if (autoStart && supported && !autoStartRef.current) {
+      autoStartRef.current = true;
+      startListening();
+    }
+  }, [autoStart, startListening, supported]);
 
   useEffect(() => {
     return () => {

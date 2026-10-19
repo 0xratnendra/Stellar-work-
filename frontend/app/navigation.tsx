@@ -6,13 +6,59 @@ import { useWallet, WalletButton } from "@/lib/wallet-context";
 import { useMessaging } from "@/lib/messaging-context";
 import { useTheme } from "@/components/ThemeProvider";
 import { useLocale } from "next-intl";
-import { memo, useState, useEffect, useRef } from "react";
+import { memo, useState, useEffect, useRef, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import NetworkBadge from "@/components/NetworkBadge";
 import NetworkSwitcher from "@/components/NetworkSwitcher";
 import NotificationInbox from "@/components/NotificationInbox";
 import WalletMenu from "@/components/WalletMenu";
-import VoiceNav from "@/components/VoiceNav";
 import { useNotifications } from "@/lib/notifications-context";
+
+const VoiceNavImplementation = dynamic(
+  () => import("@/components/VoiceNav"),
+  {
+    ssr: false,
+    loading: () => (
+      <span role="status" aria-label="Loading voice navigation" className="inline-flex h-9 w-9 items-center justify-center">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+      </span>
+    ),
+  },
+);
+
+const subscribeToSpeechSupport = () => () => undefined;
+
+function getSpeechSupport() {
+  return typeof window !== "undefined" &&
+    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+}
+
+function DeferredVoiceNav() {
+  const supported = useSyncExternalStore(
+    subscribeToSpeechSupport,
+    getSpeechSupport,
+    () => false,
+  );
+  const [requested, setRequested] = useState(false);
+
+  if (!supported) return null;
+  if (requested) return <VoiceNavImplementation autoStart />;
+
+  return (
+    <button
+      type="button"
+      onClick={() => setRequested(true)}
+      aria-label="Start voice navigation"
+      aria-pressed="false"
+      title="Voice navigation"
+      className="rounded-md p-2 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+    >
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 0 1 6 0v8.25a3 3 0 0 1-3 3z" />
+      </svg>
+    </button>
+  );
+}
 
 const ThemeToggle = memo(function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -228,7 +274,7 @@ export const Navigation = memo(function Navigation() {
             ))}
           </nav>
 
-          <VoiceNav />
+          <DeferredVoiceNav />
           <NotificationInbox />
           {notificationUnreadCount > 0 && (
             <span className="rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white" aria-label={`${notificationUnreadCount} unread notifications`}>{notificationUnreadCount}</span>

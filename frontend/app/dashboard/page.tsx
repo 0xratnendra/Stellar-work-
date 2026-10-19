@@ -20,7 +20,7 @@ import {
   extendDeadline,
 } from "@/lib/contract";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import JobCelebrationModal from "@/components/JobCelebrationModal";
+import dynamic from "next/dynamic";
 import EmptyState from "@/components/EmptyState";
 import ErrorBanner from "@/components/ErrorBanner";
 import ExportButton from "@/components/ExportButton";
@@ -48,6 +48,20 @@ import { STATUS_TO_COUNTS_KEY } from "@/lib/types";
 import { useEffect, useState, useCallback, useRef, useMemo, type KeyboardEvent } from "react";
 import { buildActiveFreelancerJobCountMap } from "@/lib/availability";
 import AvailabilityIndicator from "@/components/AvailabilityIndicator";
+
+const JobCelebrationModal = dynamic(
+  () => import("@/components/JobCelebrationModal"),
+  {
+    ssr: false,
+    loading: () => (
+      <div role="status" aria-label="Loading celebration" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/70 p-4 backdrop-blur-sm sm:p-6">
+        <div className="flex min-h-[36rem] w-full max-w-lg items-center justify-center animate-pulse rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-8">
+          <span className="text-sm text-slate-500">Loading celebration...</span>
+        </div>
+      </div>
+    ),
+  },
+);
 
 export type PendingDashAction = {
   type: "cancelJob" | "approveWork" | "submitWork" | "freelancerCancelJob" | "enforceDeadline";
