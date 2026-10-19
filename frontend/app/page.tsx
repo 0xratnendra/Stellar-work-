@@ -15,8 +15,8 @@ import CancelJobConfirmModal from "@/components/CancelJobConfirmModal";
 import SwipeableJobCard from "@/components/SwipeableJobCard";
 import ClientReputationBadge from "@/components/ClientReputationBadge";
 import JobFilterPanel, { DEFAULT_FILTERS, type JobFilters } from "@/components/JobFilterPanel";
-import { acceptJob, cancelJob, getDescriptionCid, getJob, getJobCount } from "@/lib/contract";
-import { fetchFromIpfs } from "@/lib/ipfs-service";
+import { acceptJob, cancelJob, getJob, getJobCount } from "@/lib/contract";
+import { resolveJobDescription } from "@/lib/job-descriptions";
 import { JOB_CATEGORIES } from "@/lib/job-categories";
 import { useNotifications } from "@/lib/notifications-context";
 import {
@@ -289,6 +289,37 @@ export default function HomePage() {
     });
   }
 
+  const loadDescriptions = useCallback((jobRows: Array<{ id: number; job: Job }>) => {
+    const hashes = Array.from(new Set(jobRows.map(({ job }) => job.description_hash)));
+    const cachedDescriptions: Record<string, string> = {};
+
+    for (const hash of hashes) {
+      try {
+        const cached = localStorage.getItem(`job-desc:${hash}`);
+        if (cached) cachedDescriptions[hash] = cached;
+      } catch {
+        // Keep rendering jobs when browser storage is unavailable.
+      }
+    }
+
+    setDescriptions(cachedDescriptions);
+
+    for (const hash of hashes) {
+      void resolveJobDescription(hash).then((description) => {
+        setDescriptions((current) => {
+          if (description === null) {
+            if (!(hash in current)) return current;
+            const next = { ...current };
+            delete next[hash];
+            return next;
+          }
+          if (current[hash] === description) return current;
+          return { ...current, [hash]: description };
+        });
+      });
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -315,21 +346,8 @@ export default function HomePage() {
         try {
           const cached = JSON.parse(cachedRaw) as { count: number; jobs: Array<{ id: number; job: Job }>; at: number };
           if (cached.count === count && Date.now() - cached.at < JOBS_CACHE_TTL_MS) {
-            const descMap: Record<string, string> = {};
-            for (const { job } of cached.jobs) {
-              const stored = localStorage.getItem(`job-desc:${job.description_hash}`);
-              if (stored) {
-                // Verify integrity where possible; best-effort synchronous fallthrough
-                try {
-                  // We'll verify asynchronously below when populating from fetched results
-                  descMap[job.description_hash] = stored;
-                } catch {
-                  // ignore
-                }
-              }
-            }
-            setDescriptions(descMap);
             setJobs(cached.jobs);
+            loadDescriptions(cached.jobs);
             isInitialLoadRef.current = false;
             setLoading(false);
             return;
@@ -365,46 +383,6 @@ export default function HomePage() {
 
       fetched.sort(compareJobs(sortOrder));
 
-      const descMap: Record<string, string> = {};
-      for (const { job } of fetched) {
-        const hash = job.description_hash;
-        const stored = localStorage.getItem(`job-desc:${hash}`);
-        if (stored) {
-          try {
-            // verify integrity before using stored value
-            // import verify lazily to avoid SSR issues
-             
-            const { verifyHtmlMatchesHash } = await import("@/lib/crypto");
-            // If verification fails, fall back to attempting IPFS fetch
-            if (await verifyHtmlMatchesHash(stored, hash)) {
-              descMap[hash] = stored;
-              continue;
-            }
-          } catch {
-            // proceed to attempt IPFS fetch
-          }
-        }
-        try {
-          const cid = await getDescriptionCid(hash);
-          if (cid) {
-            const text = await fetchFromIpfs(cid);
-            // verify fetched text
-            try {
-              const { verifyHtmlMatchesHash } = await import("@/lib/crypto");
-              if (await verifyHtmlMatchesHash(text, hash)) {
-                descMap[hash] = text;
-                localStorage.setItem(`job-desc:${hash}`, text);
-              }
-            } catch {
-              // verification failed or crypto helper not available, skip storing
-            }
-          }
-        } catch {
-          // IPFS fetch failed, description will show fallback text
-        }
-      }
-      setDescriptions(descMap);
-
       const incomingIds = fetched.map(({ id }) => id);
       if (!isInitialLoadRef.current) {
         const addedIds = incomingIds.filter((id) => !seenJobIdsRef.current.has(id));
@@ -422,6 +400,7 @@ export default function HomePage() {
       isInitialLoadRef.current = false;
 
       setJobs(fetched);
+      loadDescriptions(fetched);
 
       try {
         if (typeof window !== "undefined") {
@@ -439,7 +418,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortOrder]);
+  }, [loadDescriptions, page, pageSize, sortOrder]);
 
   useEffect(() => {
     void refresh();
@@ -465,8 +444,6 @@ export default function HomePage() {
 
   const getDescription = useCallback((hash: string): string => {
     if (descriptions[hash]) return descriptions[hash];
-    const stored = localStorage.getItem(`job-desc:${hash}`);
-    if (stored) return stored;
     return "Description unavailable (posted from another device)";
   }, [descriptions]);
 

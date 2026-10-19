@@ -140,6 +140,8 @@ Follow [DEPLOYMENT.md §2](./DEPLOYMENT.md#2-contract-deployment) for full step-
 
 Use two wallets: one for the client role, one for the freelancer.
 
+Complete the [pre-release messaging and meetings QA checklist](./messaging-meetings-qa-checklist.md) against the release candidate and record its result before release sign-off.
+
 ### 5.1 Wallet Connection
 
 - [ ] "Connect Wallet" button opens Freighter popup
@@ -244,4 +246,4 @@ Blockers (if no-go):
 
 ---
 
-*Related: [DEPLOYMENT.md](./DEPLOYMENT.md) · [OPS_RUNBOOK.md](./OPS_RUNBOOK.md) · [release-checklist.md](./release-checklist.md) · [production-escalation.md](./production-escalation.md)*
+*Related: [DEPLOYMENT.md](./DEPLOYMENT.md) · [OPS_RUNBOOK.md](./OPS_RUNBOOK.md) · [release-checklist.md](./release-checklist.md) · [messaging-meetings-qa-checklist.md](./messaging-meetings-qa-checklist.md) · [production-escalation.md](./production-escalation.md)*
