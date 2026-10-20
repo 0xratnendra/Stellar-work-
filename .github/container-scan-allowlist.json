@@ -1,0 +1,25 @@
+{
+  "_comment": [
+    "Container image vulnerability allowlist.",
+    "",
+    "Each entry in 'vulnerabilities' accepts a known finding that cannot be",
+    "remediated immediately. The enforcement script (.github/scripts/check-trivy-allowlist.mjs)",
+    "reads this file and fails the CI job if any CRITICAL or HIGH finding is",
+    "not listed here.",
+    "",
+    "Fields per entry:",
+    "  id          - CVE or GHSA identifier, e.g. 'CVE-2024-12345'",
+    "  packageName - Affected package name as reported by Trivy",
+    "  reason      - Why this cannot be patched now (required, non-empty)",
+    "  expiresAt   - ISO 8601 date after which the entry is no longer valid.",
+    "                The script treats expired entries as unapproved findings.",
+    "                Maximum 90 days from the date of addition.",
+    "  addedBy     - GitHub username or team that approved this entry",
+    "  addedAt     - ISO 8601 date this entry was added",
+    "",
+    "To add an entry: open a PR with the new entry and a link to the upstream",
+    "issue or patch release timeline. A second reviewer must approve the PR.",
+    "See SECURITY.md § Container scanning for the full process."
+  ],
+  "vulnerabilities": []
+}

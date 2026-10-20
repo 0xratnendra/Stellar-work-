@@ -1,0 +1,209 @@
+name: Container Image Scan (Scheduled)
+
+# Scans the latest published image on a weekly cadence so newly-disclosed
+# CVEs that affect the already-shipped image are caught between deployments.
+# Also runs immediately after any push to main that updates the Dockerfile
+# or its direct dependencies, acting as a post-merge gate.
+
+on:
+  schedule:
+    # Every Monday at 04:00 UTC — staggered from CodeQL (Sun 01:30) and
+    # dependency-audit (daily 03:00) to spread Security-tab ingestion load.
+    - cron: '0 4 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/Dockerfile'
+      - 'docker-compose.yml'
+      - '.env.docker'
+      - '.github/workflows/container-scan-scheduled.yml'
+      - '.github/container-scan-allowlist.json'
+      - '.github/scripts/check-trivy-allowlist.mjs'
+  # Allow manual dispatch for on-demand scans (e.g. after a base-image CVE
+  # advisory is published mid-week).
+  workflow_dispatch:
+    inputs:
+      image_ref:
+        description: >
+          Image reference to scan. Defaults to building from the current
+          Dockerfile when left blank.
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  security-events: write  # upload SARIF to Security tab
+  issues: write           # open a GitHub Issue on new critical findings
+
+concurrency:
+  group: container-scan-scheduled-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scheduled-scan:
+    name: Scheduled Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Resolve image ─────────────────────────────────────────────────────
+      # Use the caller-supplied image reference when one is given (manual
+      # dispatch with a registry digest), otherwise build fresh from the
+      # Dockerfile so the scan always reflects the current source state.
+      - name: Resolve image reference
+        id: image
+        run: |
+          if [[ -n "${{ inputs.image_ref }}" ]]; then
+            echo "ref=${{ inputs.image_ref }}" >> "$GITHUB_OUTPUT"
+            echo "built=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=stellarwork-frontend:scheduled-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build production image
+        if: steps.image.outputs.built == 'true'
+        run: |
+          docker build \
+            --target runner \
+            --tag ${{ steps.image.outputs.ref }} \
+            ./frontend
+
+      # ── Trivy scan — JSON ─────────────────────────────────────────────────
+      - name: Run Trivy (JSON report)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          format: json
+          output: trivy-results.json
+          severity: CRITICAL,HIGH
+          vuln-type: os,library
+          ignore-unfixed: true
+          exit-code: '0'
+
+      # ── Allowlist enforcement ─────────────────────────────────────────────
+      - name: Enforce allowlist
+        id: allowlist
+        run: |
+          node .github/scripts/check-trivy-allowlist.mjs \
+            --input trivy-results.json \
+            --allowlist .github/container-scan-allowlist.json
+
+      # ── SARIF upload ──────────────────────────────────────────────────────
+      - name: Run Trivy (SARIF report)
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          vuln-type: os,library
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: container-image-scheduled
+
+      # ── Artifact retention ────────────────────────────────────────────────
+      - name: Upload scan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scheduled-scan-${{ github.run_id }}
+          path: trivy-results.json
+          retention-days: 90
+
+      # ── Open a GitHub Issue on new critical findings ───────────────────────
+      # The scheduled scan may surface CVEs that were disclosed after the last
+      # deployment. Opening an issue ensures the finding is tracked and assigned
+      # even when no one is actively watching the Actions tab.
+      #
+      # De-duplication: the script checks for an open issue whose title starts
+      # with the exact prefix "[container-scan] CRITICAL" before creating a new
+      # one, so re-runs of the same findings don't spam the tracker.
+      - name: Open issue on new critical findings
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Parse findings from JSON report.
+            let criticals = [];
+            try {
+              const raw = JSON.parse(fs.readFileSync('trivy-results.json', 'utf8'));
+              for (const result of raw.Results ?? []) {
+                for (const vuln of result.Vulnerabilities ?? []) {
+                  if (vuln.Severity === 'CRITICAL') {
+                    criticals.push(vuln);
+                  }
+                }
+              }
+            } catch (e) {
+              core.warning(`Could not parse trivy-results.json: ${e.message}`);
+              return;
+            }
+
+            if (criticals.length === 0) return;
+
+            const issueTitle = '[container-scan] CRITICAL vulnerabilities detected in frontend image';
+
+            // Check for an existing open issue to avoid duplicates.
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,container-scan',
+              per_page: 20,
+            });
+            const existing = openIssues.find(i => i.title === issueTitle);
+
+            const rows = criticals.map(v =>
+              `| \`${v.VulnerabilityID}\` | \`${v.PkgName}\` | ${v.InstalledVersion} ` +
+              `| ${v.FixedVersion ?? '—'} | ${v.Title ?? '—'} |`
+            );
+
+            const body = [
+              '## Critical container vulnerabilities',
+              '',
+              `Detected by the [scheduled container scan](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) ` +
+              `on ${new Date().toISOString().slice(0, 10)}.`,
+              '',
+              '| CVE | Package | Installed | Fixed in | Title |',
+              '|-----|---------|-----------|----------|-------|',
+              ...rows,
+              '',
+              '### Remediation options',
+              '1. **Upgrade the base image** — rebuild after `node:20-alpine` ships a patched release.',
+              '2. **Pin a fixed digest** — update `FROM node:20-alpine` to a specific digest that includes the fix.',
+              '3. **Add an allowlist entry** — if remediation is blocked (e.g. no upstream fix exists), add an entry to `.github/container-scan-allowlist.json` with a justification and expiry ≤ 90 days. See [SECURITY.md](../../blob/main/SECURITY.md#container-scanning).',
+              '',
+              '_This issue was opened automatically. Close it once all findings are resolved or allowlisted._',
+            ].join('\n');
+
+            if (existing) {
+              // Update the existing issue body so the latest findings are visible.
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.info(`Updated existing issue #${existing.number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body,
+                labels: ['security', 'container-scan'],
+              });
+              core.info(`Opened issue #${issue.number}: ${issue.html_url}`);
+            }

@@ -112,6 +112,14 @@ jobs:
     env:
       NEXT_PUBLIC_CONTRACT_ID: ${{ secrets.SOROBAN_CONTRACT_ID }}
       NEXT_PUBLIC_NETWORK: testnet
+      # SENTRY_AUTH_TOKEN is intentionally omitted from the general CI job —
+      # source map uploads happen in the dedicated deploy workflows where the
+      # production/preview environment secrets are available.
+      # Providing the DSN here ensures the build validates DSN-dependent code
+      # paths without uploading real source maps on every PR.
+      NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG || 'stellarwork' }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || 'stellarwork-frontend' }}
 
     steps:
       - name: Checkout code

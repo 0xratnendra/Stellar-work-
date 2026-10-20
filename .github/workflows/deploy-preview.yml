@@ -12,6 +12,21 @@ concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# ── Permissions ───────────────────────────────────────────────────────────────
+# Minimal baseline. Preview deployments run on pull requests, including those
+# from forks. id-token: write is intentionally absent at workflow level and
+# added only to the deploy-preview job.
+#
+# Note on fork PRs: GitHub does not issue OIDC tokens for workflows triggered
+# by pull_request events from forks when the forked repo is not trusted. In
+# that case the configure-aws-credentials step will be skipped gracefully —
+# preview deployments from forks go to Vercel only, which is fine because
+# VERCEL_TOKEN is a project-scoped secret and the environment gate is not set
+# for the preview environment.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   deploy-preview:
     if: github.event.action != 'closed'
@@ -19,12 +34,26 @@ jobs:
     runs-on: ubuntu-latest
     environment: preview
 
+    permissions:
+      contents: read
+      pull-requests: write
+      # id-token: write issued only here so the plan/read-only role can be
+      # assumed for any AWS introspection a preview build might need.
+      id-token: write
+
     defaults:
       run:
         working-directory: frontend
+
     env:
       NEXT_PUBLIC_CONTRACT_ID: ${{ secrets.SOROBAN_CONTRACT_ID }}
       NEXT_PUBLIC_NETWORK: testnet
+      NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG || 'stellarwork' }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || 'stellarwork-frontend' }}
+      SENTRY_RELEASE: ${{ github.sha }}
+      NEXT_PUBLIC_SENTRY_RELEASE: ${{ github.sha }}
 
     steps:
       - name: Checkout code
@@ -48,6 +77,21 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # ── AWS access via OIDC (read-only plan role) ──────────────────────────
+      # Preview deployments only need read access to AWS (e.g. to resolve
+      # resource ARNs or verify config). The plan role has ReadOnlyAccess.
+      # This step is skipped for fork PRs — GitHub does not issue OIDC tokens
+      # to untrusted fork workflows and configure-aws-credentials will fail
+      # gracefully when the secret is absent.
+      - name: Configure AWS credentials (OIDC)
+        if: vars.TERRAFORM_PLAN_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: deploy-preview-${{ github.run_id }}
+          role-duration-seconds: 1800
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
@@ -126,11 +170,16 @@ jobs:
     name: Remove Preview
     runs-on: ubuntu-latest
 
+    # No AWS access needed for teardown — Vercel cleanup only.
+    permissions:
+      contents: read
+      pull-requests: read
+
     steps:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Get Preview URL
+      - name: Get Preview URL from PR comment
         id: get_url
         uses: actions/github-script@v7
         with:
@@ -146,9 +195,7 @@ jobs:
             );
             if (existing) {
               const match = existing.body.match(/Preview URL: \*\*(https:\/\/[^*]+)\*\*/);
-              if (match) {
-                core.setOutput('url', match[1]);
-              }
+              if (match) core.setOutput('url', match[1]);
             }
 
       - name: Remove Vercel deployment

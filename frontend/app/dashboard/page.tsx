@@ -10,8 +10,6 @@ import {
   batchApproveJobs,
   cancelJob,
   freelancerCancelJob,
-  getJob,
-  getJobCount,
   getCompletedJobsCount,
   getJobStatusCounts,
   submitWork,
@@ -19,6 +17,7 @@ import {
   rateJob,
   extendDeadline,
 } from "@/lib/contract";
+import { useBatchJobs } from "@/lib/hooks/useBatchJobs";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import JobCelebrationModal from "@/components/JobCelebrationModal";
 import EmptyState from "@/components/EmptyState";
@@ -45,6 +44,7 @@ import { isConfirmSuppressed, CONFIRM_KEYS } from "@/lib/confirm-prefs";
 import { useWallet } from "@/lib/wallet-context";
 import type { Job, JobStatus, NotificationEvent, JobStatusCounts } from "@/lib/types";
 import { STATUS_TO_COUNTS_KEY } from "@/lib/types";
+import { getJob } from "@/lib/contract";
 import { useEffect, useState, useCallback, useRef, useMemo, type KeyboardEvent } from "react";
 import { buildActiveFreelancerJobCountMap } from "@/lib/availability";
 import AvailabilityIndicator from "@/components/AvailabilityIndicator";
@@ -138,19 +138,20 @@ export default function DashboardPage() {
   const filterOptions: Array<JobStatus | "All" | "Active"> = ["All", ...STATUS_OPTIONS];
   const filterButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
+  const { fetchAllMatching, progress: batchProgress } = useBatchJobs();
+
   const fetchJobs = useCallback(async () => {
     if (!wallet) return;
     setLoading(true);
     setError(null);
     try {
-      const count = await getJobCount();
-      const fetched: Array<{ id: number; job: Job }> = [];
-      for (let id = 1; id <= count; id += 1) {
-        const job = await getJob(String(id));
-        if (job && (job.client === wallet || job.freelancer === wallet)) {
-          fetched.push({ id, job });
-        }
-      }
+      // Replace the serial for-loop with bounded batch reads.
+      // getJobsBatch fetches up to 50 jobs per RPC call with up to 3 in
+      // flight at once, so a 1000-job contract completes in ≤21 calls total
+      // instead of 1001 sequential calls.
+      const fetched = await fetchAllMatching(
+        (job) => job.client === wallet || job.freelancer === wallet,
+      );
       setAllJobs(fetched);
       try {
         const completed = await getCompletedJobsCount();
@@ -169,7 +170,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [wallet]);
+  }, [wallet, fetchAllMatching]);
 
   useEffect(() => {
     if (wallet) {
@@ -645,10 +646,21 @@ export default function DashboardPage() {
         />
       )}
       {loading && (
-        <div className="grid gap-4 md:grid-cols-2" aria-label="Loading jobs">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <JobCardSkeleton key={index} />
-          ))}
+        <div className="space-y-3">
+          {batchProgress.total !== null && batchProgress.total > 0 && (
+            <p
+              className="text-sm text-slate-500"
+              aria-live="polite"
+              aria-label="Loading progress"
+            >
+              Loading jobs… {batchProgress.loaded} / {batchProgress.total}
+            </p>
+          )}
+          <div className="grid gap-4 md:grid-cols-2" aria-label="Loading jobs">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <JobCardSkeleton key={index} />
+            ))}
+          </div>
         </div>
       )}
 

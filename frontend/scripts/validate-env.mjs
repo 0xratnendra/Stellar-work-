@@ -61,6 +61,29 @@ if (!process.env.NEXT_PUBLIC_ADMIN_ADDRESS) {
   );
 }
 
+// Sentry DSN is optional (app works without it) but a missing DSN in
+// production means errors will only surface through user reports.
+// Emit a warning rather than a hard error so staging deployments without
+// Sentry configured don't break CI.
+if (!process.env.NEXT_PUBLIC_SENTRY_DSN) {
+  warnings.push(
+    "NEXT_PUBLIC_SENTRY_DSN is not set — Sentry error reporting will be disabled. " +
+      "Set it to the DSN from your Sentry project's Client Keys page. " +
+      "See frontend/docs/sentry-operations.md for instructions.",
+  );
+}
+
+// SENTRY_AUTH_TOKEN is only needed at build time for source map uploads.
+// Warn in CI so the omission is visible, but don't fail the build — a
+// deployment without source maps is still functional.
+if (process.env.CI && !process.env.SENTRY_AUTH_TOKEN) {
+  warnings.push(
+    "SENTRY_AUTH_TOKEN is not set — Sentry source maps will not be uploaded. " +
+      "Stack traces in the Sentry dashboard will show minified code. " +
+      "Add SENTRY_AUTH_TOKEN to your CI secrets (see frontend/docs/sentry-operations.md).",
+  );
+}
+
 for (const warning of warnings) {
   console.warn(`::warning title=Env validation::${warning}`);
 }

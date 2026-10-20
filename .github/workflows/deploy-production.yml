@@ -11,18 +11,44 @@ concurrency:
   group: production-deployment
   cancel-in-progress: false
 
+# ── Permissions ───────────────────────────────────────────────────────────────
+# Minimal baseline. id-token: write is added only to the deploy job so the
+# OIDC token is never available to steps that don't need cloud access.
+# Vercel does not use OIDC — it uses a long-lived VERCEL_TOKEN stored as a
+# secret. That token is scoped to the Vercel project only and cannot access
+# the AWS account, so it remains as a secret rather than being federated here.
+permissions:
+  contents: read
+
 jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
+    # The 'production' GitHub Environment gates this job behind a required
+    # reviewer. The OIDC trust policy for the apply role checks the environment
+    # claim, so even if the workflow file were modified on a branch, the role
+    # would reject an assumption attempt that didn't pass the gate.
     environment: production
+
+    permissions:
+      contents: read
+      # Required to exchange the GitHub OIDC JWT for temporary AWS credentials.
+      # Scoped to this job only — not granted at workflow level.
+      id-token: write
 
     defaults:
       run:
         working-directory: frontend
+
     env:
       NEXT_PUBLIC_CONTRACT_ID: ${{ secrets.SOROBAN_CONTRACT_ID }}
       NEXT_PUBLIC_NETWORK: testnet
+      NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG || 'stellarwork' }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || 'stellarwork-frontend' }}
+      SENTRY_RELEASE: ${{ github.sha }}
+      NEXT_PUBLIC_SENTRY_RELEASE: ${{ github.sha }}
 
     steps:
       - name: Checkout code
@@ -47,6 +73,31 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Create Sentry release
+        if: env.SENTRY_AUTH_TOKEN != ''
+        run: |
+          npx @sentry/cli releases new "${{ github.sha }}"
+          npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
+          npx @sentry/cli releases finalize "${{ github.sha }}"
+          npx @sentry/cli releases deploys "${{ github.sha }}" new --env production
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG || 'stellarwork' }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || 'stellarwork-frontend' }}
+
+      # ── AWS access via OIDC ────────────────────────────────────────────────
+      # The ECS deploy role is assumed here with short-lived credentials.
+      # No AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY are stored anywhere.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: deploy-production-${{ github.run_id }}
+          # 30 minutes is sufficient for a deploy; the role's max-session is 1 h.
+          role-duration-seconds: 1800
+
+      # ── Vercel deploy (uses project-scoped VERCEL_TOKEN secret) ───────────
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 

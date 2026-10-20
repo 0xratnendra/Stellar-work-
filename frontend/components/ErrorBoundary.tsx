@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -23,6 +24,16 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    // Report to Sentry with the React component stack so the Sentry event
+    // points to the exact component that threw, not just the generic boundary.
+    Sentry.captureException(error, {
+      tags: { errorBoundary: "inline" },
+      extra: {
+        // componentStack shows the React tree path to the failing component.
+        componentStack: info.componentStack ?? undefined,
+      },
+    });
+
     console.error("ErrorBoundary caught:", error, info.componentStack);
   }
 

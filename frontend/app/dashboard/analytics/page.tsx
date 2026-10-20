@@ -1,6 +1,7 @@
 "use client";
 
-import { getJob, getJobCount, getCompletedJobsCount } from "@/lib/contract";
+import { getCompletedJobsCount } from "@/lib/contract";
+import { useBatchJobs } from "@/lib/hooks/useBatchJobs";
 import SectionCard from "@/components/SectionCard";
 import EmptyState from "@/components/EmptyState";
 import ErrorBanner from "@/components/ErrorBanner";
@@ -187,6 +188,7 @@ const DATE_RANGE_OPTIONS: Array<{ value: DateRange; label: string }> = [
 
 export default function ClientAnalyticsPage() {
   const { wallet, connectWallet } = useWallet();
+  const { fetchAllMatching } = useBatchJobs();
   const [allJobs, setAllJobs] = useState<Array<{ id: number; job: Job }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,20 +201,15 @@ export default function ClientAnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const count = await getJobCount();
-      const fetched: Array<{ id: number; job: Job }> = [];
-      for (let id = 1; id <= count; id += 1) {
-        const job = await getJob(String(id));
-        if (job && job.client === wallet) {
-          fetched.push({ id, job });
-        }
-      }
+      // Batch reads: filters client-owned jobs server-side via predicate,
+      // replacing the N-serial getJob loop.
+      const fetched = await fetchAllMatching((job) => job.client === wallet);
       setAllJobs(fetched);
       setStoredViews(loadViewCounts());
 
       try {
         const completedCount = await getCompletedJobsCount();
-        const totalPlatformJobs = count > 0 ? count : 1;
+        const totalPlatformJobs = fetched.length > 0 ? fetched.length : 1;
         setPlatformAvgViews(Math.round((completedCount / totalPlatformJobs) * 100));
       } catch {
         setPlatformAvgViews(0);
@@ -222,7 +219,7 @@ export default function ClientAnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [wallet]);
+  }, [wallet, fetchAllMatching]);
 
   useEffect(() => {
     if (wallet) {
