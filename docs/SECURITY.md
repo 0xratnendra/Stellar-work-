@@ -53,7 +53,7 @@
 
 ### XSS Prevention
 - All user-generated content (job descriptions, proposals) is sanitized with DOMPurify.
-- CSP headers are configured to restrict script sources.
+- Strict nonce-based CSP headers without 'unsafe-inline' or 'unsafe-eval' (see [CSP Rollback Procedure](docs/csp-rollback-procedure.md)).
 - React's built-in XSS protection via JSX escaping.
 - Rich text editor (Tiptap) is configured to strip dangerous HTML.
 

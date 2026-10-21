@@ -9,8 +9,10 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: process.env.npm_package_version ?? "0.1.0",
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
-    NEXT_PUBLIC_COMMIT_SHA: process.env.COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "",
-    NEXT_PUBLIC_DEPLOY_ENV: process.env.DEPLOY_ENV ?? process.env.VERCEL_ENV ?? "development",
+    NEXT_PUBLIC_COMMIT_SHA:
+      process.env.COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "",
+    NEXT_PUBLIC_DEPLOY_ENV:
+      process.env.DEPLOY_ENV ?? process.env.VERCEL_ENV ?? "development",
   },
   images: {
     remotePatterns: [
@@ -29,8 +31,8 @@ const nextConfig: NextConfig = {
 
     const cspDirectives = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self'",
+      "style-src 'self'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       // *.sentry.io is added so the Sentry SDK can send events when the

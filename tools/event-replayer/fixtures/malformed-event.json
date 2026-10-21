@@ -1,0 +1,27 @@
+{
+  "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+  "network": "testnet",
+  "start_time": "2026-10-10T00:00:00Z",
+  "end_time": "2026-10-15T00:00:00Z",
+  "events": [
+    {
+      "timestamp": "2026-10-10T11:00:00Z",
+      "event_type": "job_created",
+      "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+      "topic": ["job_created"],
+      "data": {
+        "job_id": 103,
+        "amount": 1000000
+      }
+    },
+    {
+      "timestamp": "2026-10-11T12:00:00Z",
+      "event_type": "completely_unknown_event_type",
+      "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+      "topic": ["completely_unknown_event_type"],
+      "data": {
+        "foo": "bar"
+      }
+    }
+  ]
+}
