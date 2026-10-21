@@ -8,7 +8,7 @@
     "prebuild": "npm run validate-env",
     "build": "next build",
     "start": "next start",
-    "analyze": "ANALYZE=true npm run build",
+    "analyze": "ANALYZE=true npm run build -- --webpack",
     "check-bundle-size": "node scripts/check-bundle-size.mjs",
     "bundle-report": "node scripts/generate-bundle-report.mjs",
     "measure-font-perf": "node scripts/measure-font-perf.mjs",
