@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useWallet, WalletButton } from "@/lib/wallet-context";
 import { useMessaging } from "@/lib/messaging-context";
 import { useTheme } from "@/components/ThemeProvider";
+import { useLocale, useTranslations } from "next-intl";
+import { memo, useState, useEffect, useRef } from "react";
 import { useLocale } from "next-intl";
 import { memo, useState, useEffect, useRef, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
@@ -62,6 +64,7 @@ function DeferredVoiceNav() {
 
 const ThemeToggle = memo(function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+  const t = useTranslations("theme");
 
   const cycle = () => {
     if (theme === "light") setTheme("dark");
@@ -73,8 +76,8 @@ const ThemeToggle = memo(function ThemeToggle() {
     <button
       onClick={cycle}
       className="rounded-md p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-      aria-label={`Theme: ${theme}`}
-      title={`Theme: ${theme}`}
+      aria-label={t(theme)}
+      title={t(theme)}
     >
       {theme === "light" ? (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -95,9 +98,11 @@ const ThemeToggle = memo(function ThemeToggle() {
 
 const LanguageSwitcher = memo(function LanguageSwitcher() {
   const locale = useLocale();
+  const t = useTranslations("language");
+  const nextLocale = locale === "en" ? "es" : "en";
+  const nextLanguage = t(nextLocale);
 
   const cycleLocale = () => {
-    const nextLocale = locale === "en" ? "es" : "en";
     document.cookie = `NEXT_LOCALE=${nextLocale};path=/;max-age=31536000`;
     window.location.reload();
   };
@@ -106,8 +111,8 @@ const LanguageSwitcher = memo(function LanguageSwitcher() {
     <button
       onClick={cycleLocale}
       className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-      aria-label={`Switch language: ${locale === "en" ? "Español" : "English"}`}
-      title={locale === "en" ? "Switch to Español" : "Switch to English"}
+      aria-label={t("switchTo", { locale: nextLanguage })}
+      title={t("switchTo", { locale: nextLanguage })}
     >
       {locale === "en" ? "ES" : "EN"}
     </button>
@@ -116,6 +121,7 @@ const LanguageSwitcher = memo(function LanguageSwitcher() {
 
 export const Navigation = memo(function Navigation() {
   const pathname = usePathname();
+  const t = useTranslations("nav");
   const { wallet } = useWallet();
   const { unreadCount } = useMessaging();
   // #1049 — wire up real notification unread count (job status updates)
@@ -199,21 +205,21 @@ export const Navigation = memo(function Navigation() {
   const showAdmin = wallet && adminAddress && wallet === adminAddress;
 
   const links: Array<{ href: string; label: string; shortcut?: string }> = [
-    { href: "/", label: "Jobs" },
-    { href: "/post-job", label: "Post Job", shortcut: "n" },
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/meetings", label: "Meetings" },
-    { href: "/transactions", label: "Transactions" },
-    { href: "/disputes", label: "Disputes" },
-    { href: "/messages", label: "Messages" },
+    { href: "/", label: t("jobs") },
+    { href: "/post-job", label: t("postJob"), shortcut: "n" },
+    { href: "/dashboard", label: t("dashboard") },
+    { href: "/meetings", label: t("meetings") },
+    { href: "/transactions", label: t("transactions") },
+    { href: "/disputes", label: t("disputes") },
+    { href: "/messages", label: t("messages") },
   ];
 
   if (showAdmin) {
-    links.push({ href: "/admin", label: "Admin" });
+    links.push({ href: "/admin", label: t("admin") });
   }
 
   if (wallet) {
-    links.push({ href: `/profile/${wallet}`, label: "Profile" });
+    links.push({ href: `/profile/${wallet}`, label: t("profile") });
   }
 
   const isActive = (href: string) => {
@@ -237,7 +243,7 @@ export const Navigation = memo(function Navigation() {
 
         <div className="hidden min-w-0 items-center gap-4 lg:flex">
           <nav
-            aria-label="Main navigation"
+            aria-label={t("mainNavigation")}
             className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-sm"
           >
             {links.map(({ href, label, shortcut }) => (
@@ -289,7 +295,7 @@ export const Navigation = memo(function Navigation() {
           ref={menuButtonRef}
           className="rounded-md p-2 text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 lg:hidden"
           onClick={() => setMenuOpen((prev) => !prev)}
-          aria-label="Toggle navigation menu"
+          aria-label={t("toggleMenu")}
           aria-expanded={menuOpen}
           aria-controls="mobile-nav-menu"
         >
@@ -326,7 +332,7 @@ export const Navigation = memo(function Navigation() {
           className="border-t border-slate-200 px-4 py-3 dark:border-slate-800 lg:hidden"
           onKeyDown={handleMenuKeyDown}
         >
-          <nav aria-label="Main navigation" className="flex flex-col gap-2 text-sm">
+          <nav aria-label={t("mainNavigation")} className="flex flex-col gap-2 text-sm">
             {links.map(({ href, label, shortcut }, index) => (
               <Link
                 key={href}

@@ -16,7 +16,9 @@
     "noResults": "No results found",
     "export": "Export",
     "exportCSV": "Export CSV",
-    "exportJSON": "Export JSON"
+    "exportJSON": "Export JSON",
+    "close": "Close",
+    "dismissNotification": "Dismiss notification"
   },
   "nav": {
     "jobs": "Jobs",
@@ -25,9 +27,11 @@
     "transactions": "Transactions",
     "disputes": "Disputes",
     "messages": "Messages",
+    "meetings": "Meetings",
     "admin": "Admin",
     "profile": "Profile",
     "toggleMenu": "Toggle navigation menu",
+    "mainNavigation": "Main navigation",
     "cmdK": "⌘K"
   },
   "home": {
@@ -93,7 +97,26 @@
     "switchAccount": "Switch Account",
     "connecting": "Connecting...",
     "notInstalled": "Freighter wallet not detected",
-    "installFreighter": "Install Freighter"
+    "installFreighter": "Install Freighter",
+    "menuLabel": "Wallet menu — connected as {address}",
+    "optionsLabel": "Wallet options",
+    "connectedAccount": "Connected account",
+    "copyAddressAria": "Copy wallet address to clipboard",
+    "disconnectWallet": "Disconnect Wallet",
+    "switching": "Switching...",
+    "switchAccountTitle": "Switch Account?",
+    "switchAccountDescription": "Freighter will ask you to select a different account. Your job cache will be cleared and data will refresh for the new account.",
+    "yesSwitch": "Yes, Switch",
+    "disconnectTitle": "Disconnect wallet?",
+    "disconnectDescription": "Disconnecting removes this wallet from the app. Job actions will be hidden until you reconnect.",
+    "disconnectConsequenceSaved": "Bookmarks and preferences saved in this browser are kept.",
+    "disconnectConsequenceReconnect": "You can reconnect at any time with the Connect Wallet button.",
+    "yesDisconnect": "Yes, disconnect",
+    "refreshBalance": "Refresh balance",
+    "showFullAddress": "Show full wallet address",
+    "showShortAddress": "Show shortened wallet address",
+    "showFull": "Show full",
+    "showShort": "Show short"
   },
   "transactions": {
     "title": "Transactions",
@@ -127,7 +150,14 @@
   "footer": {
     "github": "GitHub",
     "documentation": "Documentation",
-    "license": "License"
+    "license": "License",
+    "tokenomics": "Tokenomics",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "buildTime": "Build time",
+    "commit": "Commit",
+    "environment": "Environment",
+    "appVersion": "App version {version}, environment {environment}{commit}"
   },
   "theme": {
     "light": "Light mode",

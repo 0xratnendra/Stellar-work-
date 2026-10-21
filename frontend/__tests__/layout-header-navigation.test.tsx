@@ -8,6 +8,7 @@ import { Navigation } from "@/app/navigation";
 const mockUseWallet = vi.fn();
 const mockUsePathname = vi.fn();
 const mockUseMessaging = vi.fn();
+const mockLocale = vi.hoisted(() => ({ value: "en" }));
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -28,8 +29,30 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("next-intl", () => ({
-  useLocale: () => "en",
-  useTranslations: () => (key: string) => key,
+  useLocale: () => mockLocale.value,
+  useTranslations: (namespace: string) => (key: string, values?: Record<string, string>) => {
+    const translations: Record<string, Record<string, string>> = {
+      "en.nav": {
+        jobs: "Jobs", postJob: "Post Job", dashboard: "Dashboard", meetings: "Meetings",
+        transactions: "Transactions", disputes: "Disputes", messages: "Messages", admin: "Admin",
+        profile: "Profile", mainNavigation: "Main navigation", toggleMenu: "Toggle navigation menu",
+      },
+      "es.nav": {
+        jobs: "Trabajos", postJob: "Publicar Trabajo", dashboard: "Panel", meetings: "Reuniones",
+        transactions: "Transacciones", disputes: "Disputas", messages: "Mensajes", admin: "Admin",
+        profile: "Perfil", mainNavigation: "Navegación principal", toggleMenu: "Alternar menú de navegación",
+      },
+      "en.language": { switchTo: "Switch to {locale}", en: "English", es: "Español" },
+      "es.language": { switchTo: "Cambiar a {locale}", en: "English", es: "Español" },
+      "en.theme": { light: "Light mode", dark: "Dark mode", system: "System preference" },
+      "es.theme": { light: "Modo claro", dark: "Modo oscuro", system: "Preferencia del sistema" },
+    };
+    let translated = translations[`${mockLocale.value}.${namespace}`]?.[key] ?? key;
+    for (const [name, value] of Object.entries(values ?? {})) {
+      translated = translated.replaceAll(`{${name}}`, value);
+    }
+    return translated;
+  },
   NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -59,10 +82,6 @@ vi.mock("@/lib/messaging-context", () => ({
   MessagingProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
-}));
-
-vi.mock("next-intl", () => ({
-  useLocale: () => "en",
 }));
 
 vi.mock("@/components/ThemeProvider", () => ({
@@ -98,18 +117,32 @@ const ADMIN_WALLET =
 
 /** Grab the desktop nav region (first aria-label="Main navigation" element). */
 function desktopNav() {
-  return screen.getAllByRole("navigation", { name: "Main navigation" })[0];
+  return screen.getAllByRole("navigation", { name: /main navigation|navegación principal/i })[0];
 }
 
 /** Grab the mobile nav region (second aria-label="Main navigation" element when menu open). */
 function mobileNav() {
-  const navs = screen.getAllByRole("navigation", { name: "Main navigation" });
+  const navs = screen.getAllByRole("navigation", { name: /main navigation|navegación principal/i });
   return navs[navs.length - 1];
 }
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
 
 describe("Layout header navigation", () => {
+  afterEach(() => {
+    mockLocale.value = "en";
+  });
+
+  it("renders navigation labels from the selected locale", () => {
+    mockLocale.value = "es";
+    render(<Navigation />);
+
+    const nav = desktopNav();
+    expect(within(nav).getByRole("link", { name: "Trabajos" })).toHaveAttribute("href", "/");
+    expect(within(nav).getByRole("link", { name: /^Publicar Trabajo/ })).toHaveAttribute("href", "/post-job");
+    expect(within(nav).getByRole("link", { name: "Reuniones" })).toHaveAttribute("href", "/meetings");
+  });
+
   // ─── 1. UNAUTHENTICATED NAV ──────────────────────────────────────────────────
 
   describe("unauthenticated nav", () => {

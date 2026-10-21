@@ -30,7 +30,35 @@ const ENV_BADGE: Record<string, { label: string; className: string }> = {
   },
 };
 
-function VersionBadge() {
+type FooterMessages = {
+  siteTagline: string;
+  github: string;
+  documentation: string;
+  tokenomics: string;
+  license: string;
+  builtOn: string;
+  allRightsReserved: string;
+  buildTime: string;
+  commit: string;
+  environment: string;
+  appVersion: string;
+};
+
+const DEFAULT_MESSAGES: FooterMessages = {
+  siteTagline: "Decentralized Escrow Marketplace",
+  github: "GitHub",
+  documentation: "Documentation",
+  tokenomics: "Tokenomics",
+  license: "License",
+  builtOn: "Built on",
+  allRightsReserved: "StellarWork. All rights reserved.",
+  buildTime: "Build time",
+  commit: "Commit",
+  environment: "Environment",
+  appVersion: "App version {version}, environment {environment}{commit}",
+};
+
+function VersionBadge({ messages }: { messages: FooterMessages }) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const badge = ENV_BADGE[DEPLOY_ENV] ?? ENV_BADGE.development;
   const shortSha = COMMIT_SHA ? COMMIT_SHA.slice(0, 7) : null;
@@ -46,7 +74,10 @@ function VersionBadge() {
       <div className="relative">
         <button
           type="button"
-          aria-label={`App version ${APP_VERSION}, environment ${badge.label}${shortSha ? `, commit ${shortSha}` : ""}`}
+          aria-label={messages.appVersion
+            .replace("{version}", APP_VERSION)
+            .replace("{environment}", badge.label)
+            .replace("{commit}", shortSha ? `, ${messages.commit} ${shortSha}` : "")}
           aria-describedby="version-tooltip"
           className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
           onMouseEnter={() => setTooltipVisible(true)}
@@ -73,7 +104,7 @@ function VersionBadge() {
               {buildDate && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-slate-500 dark:text-slate-400">
-                    Build time
+                    {messages.buildTime}
                   </dt>
                   <dd className="font-medium text-slate-700 dark:text-slate-300">
                     {buildDate}
@@ -82,7 +113,7 @@ function VersionBadge() {
               )}
               {shortSha && (
                 <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500 dark:text-slate-400">Commit</dt>
+                    <dt className="text-slate-500 dark:text-slate-400">{messages.commit}</dt>
                   <dd className="font-mono font-medium text-slate-700 dark:text-slate-300">
                     {shortSha}
                   </dd>
@@ -90,7 +121,7 @@ function VersionBadge() {
               )}
               <div className="flex justify-between gap-3">
                 <dt className="text-slate-500 dark:text-slate-400">
-                  Environment
+                    {messages.environment}
                 </dt>
                 <dd className="font-medium text-slate-700 dark:text-slate-300">
                   {DEPLOY_ENV}
@@ -104,7 +135,11 @@ function VersionBadge() {
   );
 }
 
-export default function AppFooter() {
+export default function AppFooter({
+  messages = DEFAULT_MESSAGES,
+}: {
+  messages?: FooterMessages;
+}) {
   return (
     <footer className="mt-auto border-t border-slate-200 bg-white py-8 pb-[calc(2rem+env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto max-w-5xl px-4">
@@ -114,7 +149,7 @@ export default function AppFooter() {
               StellarWork
             </span>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Decentralized Escrow Marketplace
+              {messages.siteTagline}
             </p>
           </div>
 
@@ -128,13 +163,13 @@ export default function AppFooter() {
               rel="noopener noreferrer"
               className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
             >
-              GitHub
+              {messages.github}
             </a>
             <Link
               href="/docs"
               className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
             >
-              Documentation
+              {messages.documentation}
             </Link>
             <a
               href="https://github.com/anoncon/Stellar-work-/blob/main/docs/TOKENOMICS.md"
@@ -142,7 +177,7 @@ export default function AppFooter() {
               rel="noopener noreferrer"
               className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
             >
-              Tokenomics
+              {messages.tokenomics}
             </a>
             <a
               href="/LICENSE"
@@ -150,14 +185,14 @@ export default function AppFooter() {
               rel="noopener noreferrer"
               className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
             >
-              License
+              {messages.license}
             </a>
           </nav>
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-full border border-slate-100 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Built on
+                {messages.builtOn}
               </span>
               <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
                 Stellar
@@ -168,9 +203,9 @@ export default function AppFooter() {
 
         <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-slate-100 pt-6 sm:flex-row dark:border-slate-800">
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            &copy; {new Date().getFullYear()} StellarWork. All rights reserved.
+            &copy; {new Date().getFullYear()} {messages.allRightsReserved}
           </p>
-          <VersionBadge />
+          <VersionBadge messages={messages} />
         </div>
       </div>
     </footer>

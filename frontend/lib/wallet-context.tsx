@@ -9,6 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import {
   connectWallet as stellarConnectWallet,
   getPublicKey,
@@ -324,6 +325,8 @@ export function useWallet() {
 
 export function WalletButton() {
   const { wallet, connectWallet, disconnectWallet } = useWallet();
+  const t = useTranslations("wallet");
+  const common = useTranslations("common");
   const [connecting, setConnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [displayMode, setDisplayMode] = useState<WalletDisplayMode>("short");
@@ -384,7 +387,7 @@ export function WalletButton() {
           <button
             onClick={fetchBalance}
             className="text-slate-400 hover:text-slate-600 focus:outline-none"
-            aria-label="Refresh balance"
+            aria-label={t("refreshBalance")}
             disabled={fetchingBalance}
           >
             <svg className={`h-3 w-3 ${fetchingBalance ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -400,27 +403,27 @@ export function WalletButton() {
           className="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
           aria-label={
             displayMode === "short"
-              ? "Show full wallet address"
-              : "Show shortened wallet address"
+              ? t("showFullAddress")
+              : t("showShortAddress")
           }
         >
-          {displayMode === "short" ? "Show full" : "Show short"}
+          {displayMode === "short" ? t("showFull") : t("showShort")}
         </button>
         <button
           type="button"
           onClick={() => setConfirmDisconnect(true)}
           className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
         >
-          Disconnect
+          {t("disconnect")}
         </button>
         {confirmDisconnect && (
           <ConfirmDialog
             open={true}
-            title="Disconnect wallet?"
-            description="Disconnecting removes this wallet from the app. Job actions will be hidden until you reconnect."
-            consequences={["Bookmarks and preferences saved in this browser are kept.", "You can reconnect at any time with the Connect Wallet button."]}
-            confirmLabel="Yes, disconnect"
-            cancelLabel="Cancel"
+            title={t("disconnectTitle")}
+            description={t("disconnectDescription")}
+            consequences={[t("disconnectConsequenceSaved"), t("disconnectConsequenceReconnect")]}
+            confirmLabel={t("yesDisconnect")}
+            cancelLabel={common("cancel")}
             variant="danger"
             suppressKey={CONFIRM_KEYS.disconnectWallet}
             onConfirm={() => {
@@ -450,7 +453,7 @@ export function WalletButton() {
       disabled={connecting}
       aria-busy={connecting}
     >
-      {connecting ? "Connecting..." : "Connect Wallet"}
+      {connecting ? t("connecting") : t("connect")}
     </button>
   );
 }
