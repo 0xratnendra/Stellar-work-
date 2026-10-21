@@ -66,8 +66,15 @@ This document provides a quick reference for the `EscrowContract` methods, expec
 | `get_fee_bps` | - | Returns the current platform fee in basis points (default: 250 = 2.5%). |
 | `update_fee_bps` | `new_fee_bps: i128` | Updates the fee (requires admin auth). |
 | `withdraw_fees` | `token: Address` | Transfers accrued fees to the admin (requires admin auth). |
-| `add_allowed_token`| `token: Address` | Whitelists a token for use in jobs (requires admin auth). |
-| `is_token_allowed` | `token: Address` | Returns whether a token is whitelisted. |
+| `add_allowed_token` | `token: Address` | Adds a token to the allowed-token registry (requires admin auth). |
+| `remove_allowed_token` | `token: Address` | Removes a token from the allowed-token registry (requires admin auth). |
+| `is_token_allowed` | `token: Address` | Returns whether a token is allowed. |
+
+The `add_token_to_whitelist`, `remove_token_from_whitelist`, and
+`is_token_whitelisted` entrypoints are deprecated compatibility aliases. Use
+the corresponding canonical functions for new integrations. The aliases remain
+available and use the same `AllowedToken(token)` storage key; no storage
+migration is needed.
 
 ### `get_admin` Return Format
 
