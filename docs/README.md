@@ -47,6 +47,7 @@ Index of project documentation. Start with the [root README](../README.md) for s
 | [responsive-breakpoint-checklist.md](./responsive-breakpoint-checklist.md) | Per-route responsive QA checklist tied to the automated overflow/screenshot CI checks |
 | [MONITORING.md](./MONITORING.md) | Prometheus/Grafana dashboards, metrics reference, and alert rules |
 | [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) | Pre-launch checklist covering code, infrastructure, contract deploy, E2E verification, and sign-off |
+| [messaging-meetings-qa-checklist.md](./messaging-meetings-qa-checklist.md) | Pre-release manual QA for messaging, meetings, timezone behavior, wallet state, and sign-off |
 | [testing-matrix.md](./testing-matrix.md) | Unit, integration, and E2E test coverage and commands |
 | [TESTING_MATRIX.md](./TESTING_MATRIX.md) | Cross-browser testing matrix: supported browsers, devices, and manual checklists |
 | [TOKENOMICS.md](./TOKENOMICS.md) | Full economic model: fee calculation & distribution, fee-flow diagrams, per-party incentives, fee sensitivity analysis, and competitive comparison |

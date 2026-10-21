@@ -85,6 +85,22 @@ pub enum JobStatus {
 }
 
 #[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum JobRole {
+    Client,
+    Freelancer,
+    Either,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum JobStatusFilter {
+    All,
+    Active,
+    Status(JobStatus),
+}
+
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JobVisibility {
     Public,
@@ -2636,6 +2652,106 @@ impl EscrowContract {
             .persistent()
             .get::<ExtKey, Vec<u64>>(&ExtKey::FreelancerJobIds(freelancer))
             .unwrap_or(Vec::new(&e))
+    }
+
+    /// Return jobs involving `address`, in ascending job ID order.
+    ///
+    /// `start` is a 1-based position in the filtered result set. Pages are
+    /// limited to [`MAX_EVENT_PAGE_LIMIT`] jobs; a zero start returns empty.
+    /// `Active` matches InProgress and SubmittedForReview, consistent with
+    /// the dashboard's active-job count.
+    pub fn get_jobs_for_address(
+        e: Env,
+        address: Address,
+        role: JobRole,
+        status_filter: JobStatusFilter,
+        start: u64,
+        limit: u32,
+    ) -> Vec<(u64, Job)> {
+        let mut result = Vec::new(&e);
+        if limit == 0 || limit > MAX_EVENT_PAGE_LIMIT {
+            panic_with_error!(&e, Error::InvalidPageLimit);
+        }
+        if start == 0 {
+            return result;
+        }
+
+        let client_ids: Vec<u64> = if role != JobRole::Freelancer {
+            e.storage()
+                .persistent()
+                .get::<ExtKey, Vec<u64>>(&ExtKey::ClientJobIds(address.clone()))
+                .unwrap_or(Vec::new(&e))
+        } else {
+            Vec::new(&e)
+        };
+        let freelancer_ids: Vec<u64> = if role != JobRole::Client {
+            e.storage()
+                .persistent()
+                .get::<ExtKey, Vec<u64>>(&ExtKey::FreelancerJobIds(address))
+                .unwrap_or(Vec::new(&e))
+        } else {
+            Vec::new(&e)
+        };
+
+        let mut client_cursor = 0u32;
+        let mut freelancer_cursor = 0u32;
+        let mut matched_count = 0u64;
+        loop {
+            let client_id = client_ids.get(client_cursor);
+            let freelancer_id = freelancer_ids.get(freelancer_cursor);
+            let job_id = match (client_id, freelancer_id) {
+                (Some(client_id), Some(freelancer_id)) if client_id == freelancer_id => {
+                    client_cursor = client_cursor.saturating_add(1);
+                    freelancer_cursor = freelancer_cursor.saturating_add(1);
+                    Some(client_id)
+                }
+                (Some(client_id), Some(freelancer_id)) if client_id < freelancer_id => {
+                    client_cursor = client_cursor.saturating_add(1);
+                    Some(client_id)
+                }
+                (Some(_), Some(freelancer_id)) => {
+                    freelancer_cursor = freelancer_cursor.saturating_add(1);
+                    Some(freelancer_id)
+                }
+                (Some(client_id), None) => {
+                    client_cursor = client_cursor.saturating_add(1);
+                    Some(client_id)
+                }
+                (None, Some(freelancer_id)) => {
+                    freelancer_cursor = freelancer_cursor.saturating_add(1);
+                    Some(freelancer_id)
+                }
+                (None, None) => None,
+            };
+            let Some(job_id) = job_id else {
+                break;
+            };
+            let Some(job) = e
+                .storage()
+                .persistent()
+                .get::<DataKey, Job>(&DataKey::Job(job_id))
+            else {
+                continue;
+            };
+            let status_matches = match &status_filter {
+                JobStatusFilter::All => true,
+                JobStatusFilter::Active => matches!(
+                    &job.status,
+                    JobStatus::InProgress | JobStatus::SubmittedForReview
+                ),
+                JobStatusFilter::Status(status) => &job.status == status,
+            };
+            if status_matches {
+                matched_count = matched_count.saturating_add(1);
+                if matched_count >= start {
+                    result.push_back((job_id, job));
+                    if result.len() == limit {
+                        break;
+                    }
+                }
+            }
+        }
+        result
     }
 
     /// Return a paginated slice of disputed `Job` structs for `viewer`.
@@ -6955,6 +7071,174 @@ mod test {
         assert_eq!(empty_zero_start.len(), 0);
         let empty_zero_limit = client.get_jobs_batch(&1u64, &0u32);
         assert_eq!(empty_zero_limit.len(), 0);
+    }
+
+    #[test]
+    fn get_jobs_for_address_filters_roles_statuses_and_pages() {
+        let (env, client, _, user, freelancer, native_token) = setup();
+        let post = |amount| {
+            client.post_job(
+                &user,
+                &amount,
+                &hash(&env),
+                &32u32,
+                &0u64,
+                &native_token,
+            )
+        };
+
+        let open = post(1_000_000);
+        let in_progress = post(2_000_000);
+        client.accept_job(&freelancer, &in_progress);
+        let submitted = post(3_000_000);
+        client.accept_job(&freelancer, &submitted);
+        client.submit_work(&freelancer, &submitted);
+        let completed = post(4_000_000);
+        client.accept_job(&freelancer, &completed);
+        client.submit_work(&freelancer, &completed);
+        client.approve_work(&user, &completed);
+        let cancelled = post(5_000_000);
+        client.cancel_job(&user, &cancelled);
+        let disputed = post(6_000_000);
+        client.accept_job(&freelancer, &disputed);
+        client.raise_dispute(&user, &disputed);
+
+        let other_client = Address::generate(&env);
+        token::StellarAssetClient::new(&env, &native_token).mint(&other_client, &7_000_000);
+        let freelancer_role_job = client.post_job(
+            &other_client,
+            &7_000_000i128,
+            &hash(&env),
+            &32u32,
+            &0u64,
+            &native_token,
+        );
+        client.accept_job(&user, &freelancer_role_job);
+
+        let client_jobs = client.get_jobs_for_address(
+            &user,
+            &JobRole::Client,
+            &JobStatusFilter::All,
+            &1u64,
+            &10u32,
+        );
+        assert_eq!(client_jobs.len(), 6);
+        assert_eq!(client_jobs.get(0).unwrap().0, open);
+        assert_eq!(client_jobs.get(5).unwrap().0, disputed);
+
+        let freelancer_jobs = client.get_jobs_for_address(
+            &freelancer,
+            &JobRole::Freelancer,
+            &JobStatusFilter::All,
+            &1u64,
+            &10u32,
+        );
+        assert_eq!(freelancer_jobs.len(), 4);
+        assert_eq!(freelancer_jobs.get(0).unwrap().0, in_progress);
+        assert_eq!(freelancer_jobs.get(3).unwrap().0, disputed);
+
+        let either_jobs = client.get_jobs_for_address(
+            &user,
+            &JobRole::Either,
+            &JobStatusFilter::All,
+            &1u64,
+            &10u32,
+        );
+        assert_eq!(either_jobs.len(), 7);
+        assert_eq!(either_jobs.get(1).unwrap().0, in_progress);
+        assert_eq!(either_jobs.get(6).unwrap().0, freelancer_role_job);
+
+        let active_jobs = client.get_jobs_for_address(
+            &user,
+            &JobRole::Client,
+            &JobStatusFilter::Active,
+            &1u64,
+            &10u32,
+        );
+        assert_eq!(active_jobs.len(), 2);
+        assert_eq!(active_jobs.get(0).unwrap().0, in_progress);
+        assert_eq!(active_jobs.get(1).unwrap().0, submitted);
+
+        for (status, expected_id) in [
+            (JobStatus::Open, open),
+            (JobStatus::InProgress, in_progress),
+            (JobStatus::SubmittedForReview, submitted),
+            (JobStatus::Completed, completed),
+            (JobStatus::Cancelled, cancelled),
+            (JobStatus::Disputed, disputed),
+        ] {
+            let matching = client.get_jobs_for_address(
+                &user,
+                &JobRole::Client,
+                &JobStatusFilter::Status(status),
+                &1u64,
+                &10u32,
+            );
+            assert_eq!(matching.len(), 1);
+            assert_eq!(matching.get(0).unwrap().0, expected_id);
+        }
+
+        let middle_page = client.get_jobs_for_address(
+            &user,
+            &JobRole::Client,
+            &JobStatusFilter::All,
+            &2u64,
+            &2u32,
+        );
+        assert_eq!(middle_page.len(), 2);
+        assert_eq!(middle_page.get(0).unwrap().0, in_progress);
+        assert_eq!(middle_page.get(1).unwrap().0, submitted);
+        assert_eq!(
+            client
+                .get_jobs_for_address(
+                    &user,
+                    &JobRole::Client,
+                    &JobStatusFilter::All,
+                    &0u64,
+                    &2u32,
+                )
+                .len(),
+            0
+        );
+        assert_eq!(
+            client
+                .get_jobs_for_address(
+                    &user,
+                    &JobRole::Client,
+                    &JobStatusFilter::All,
+                    &7u64,
+                    &2u32,
+                )
+                .len(),
+            0
+        );
+
+        let stranger = Address::generate(&env);
+        assert_eq!(
+            client
+                .get_jobs_for_address(
+                    &stranger,
+                    &JobRole::Either,
+                    &JobStatusFilter::All,
+                    &1u64,
+                    &10u32,
+                )
+                .len(),
+            0
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #46)")]
+    fn get_jobs_for_address_rejects_oversized_page() {
+        let (_, client, _, user, _, _) = setup();
+        client.get_jobs_for_address(
+            &user,
+            &JobRole::Client,
+            &JobStatusFilter::All,
+            &1u64,
+            &(MAX_EVENT_PAGE_LIMIT + 1),
+        );
     }
 
     #[test]

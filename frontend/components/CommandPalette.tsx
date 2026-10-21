@@ -29,10 +29,10 @@ function fuzzyMatch(query: string, text: string): boolean {
   return false;
 }
 
-export default function CommandPalette() {
+export default function CommandPalette({ initialOpen = false }: { initialOpen?: boolean }) {
   const router = useRouter();
   const { wallet, connectWallet } = useWallet();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const dialogRef = useRef<HTMLDivElement>(null);

@@ -2,7 +2,6 @@
 
 import CancelJobConfirmModal from "@/components/CancelJobConfirmModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import JobCelebrationModal from "@/components/JobCelebrationModal";
 import AvailabilityIndicator from "@/components/AvailabilityIndicator";
 import ContractRetryBanner from "@/components/ContractRetryBanner";
 import DeadlineCountdown from "@/components/DeadlineCountdown";
@@ -73,6 +72,20 @@ import { useJobSubscription } from "@/lib/useJobSubscription";
 const RichTextRenderer = dynamic(
   () => import("@/components/RichTextRenderer"),
   { ssr: false, loading: () => <p className="text-sm text-slate-500">Loading description…</p> },
+);
+
+const JobCelebrationModal = dynamic(
+  () => import("@/components/JobCelebrationModal"),
+  {
+    ssr: false,
+    loading: () => (
+      <div role="status" aria-label="Loading celebration" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/70 p-4 backdrop-blur-sm sm:p-6">
+        <div className="flex min-h-[36rem] w-full max-w-lg items-center justify-center animate-pulse rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-8">
+          <span className="text-sm text-slate-500">Loading celebration...</span>
+        </div>
+      </div>
+    ),
+  },
 );
 
 type PendingAction =
@@ -1750,9 +1763,9 @@ useEffect(() => {
       ) : null}
 
       {/* Celebration Animation Modal */}
-      {job && (
+      {job && showCelebrationModal && (
         <JobCelebrationModal
-          isOpen={showCelebrationModal}
+          isOpen
           onClose={() => setShowCelebrationModal(false)}
           jobId={id}
           jobTitle={job.title || `Job #${id}`}
