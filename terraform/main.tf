@@ -1,3 +1,16 @@
+module "github_oidc" {
+  source = "./modules/github-oidc"
+
+  github_org         = var.github_org
+  github_repo        = var.github_repo
+  github_environment = var.github_environment
+  role_name_prefix   = "stellarwork-${var.environment}"
+
+  # Set to false in environments that share an AWS account with another
+  # environment — the OIDC provider is account-scoped and can only exist once.
+  create_oidc_provider = var.create_oidc_provider
+}
+
 module "networking" {
   source      = "./modules/networking"
   environment = var.environment

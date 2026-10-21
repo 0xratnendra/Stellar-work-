@@ -6,24 +6,27 @@ on:
       - main
     paths:
       - "terraform/**"
+      - ".github/workflows/terraform.yml"
   pull_request:
     branches:
       - main
     paths:
       - "terraform/**"
+      - ".github/workflows/terraform.yml"
 
+# ── Permissions ───────────────────────────────────────────────────────────────
+# Declared at workflow level as the most-restrictive baseline.
+# The apply job overrides with id-token: write so it alone can request an
+# OIDC token from GitHub's IdP — plan and format jobs never receive one.
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  terraform:
-    name: "Terraform"
+  # ── Format & validate (no cloud access needed) ──────────────────────────────
+  validate:
+    name: "Format & Validate"
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: "us-east-1"
 
     steps:
       - name: Checkout
@@ -39,6 +42,40 @@ jobs:
         run: terraform fmt -check -recursive
         working-directory: ./terraform
 
+  # ── Plan (read-only OIDC role, PR events only) ───────────────────────────────
+  plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: validate
+
+    permissions:
+      contents: read
+      pull-requests: write
+      # id-token: write is required to exchange the GitHub OIDC JWT for
+      # temporary AWS credentials via sts:AssumeRoleWithWebIdentity.
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      # Exchanges the GitHub OIDC JWT for short-lived AWS credentials scoped to
+      # the plan role (ReadOnlyAccess). No static keys involved.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+          # 30-minute session is ample for plan; shorter is better.
+          role-session-name: terraform-plan-${{ github.run_id }}
+          role-duration-seconds: 1800
+
       - name: Terraform Init
         id: init
         run: terraform init
@@ -51,44 +88,116 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        if: github.event_name == 'pull_request'
-        run: terraform plan -no-color -var-file="environments/staging/terraform.tfvars"
+        run: |
+          terraform plan -no-color \
+            -var-file="environments/staging/terraform.tfvars" \
+            2>&1 | tee /tmp/plan-output.txt
+          # Capture exit code separately so continue-on-error still records it.
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         working-directory: ./terraform
         continue-on-error: true
 
-      - name: Update Pull Request
+      - name: Post plan to PR
         uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
+        env:
+          PLAN_OUTPUT: ${{ steps.plan.outcome }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            const fs = require('fs');
+            let planText = '';
+            try {
+              planText = fs.readFileSync('/tmp/plan-output.txt', 'utf8').slice(0, 60000);
+            } catch (_) {}
 
-            <details><summary>Show Plan</summary>
+            const output = [
+              '#### Terraform Format 🖌 `${{ steps.fmt.outcome }}`',
+              '#### Terraform Init ⚙️ `${{ steps.init.outcome }}`',
+              '#### Terraform Validate 🤖 `${{ steps.validate.outcome }}`',
+              '#### Terraform Plan 📖 `${{ steps.plan.outcome }}`',
+              '',
+              '<details><summary>Show Plan</summary>',
+              '',
+              '```hcl',
+              planText,
+              '```',
+              '</details>',
+              '',
+              `*Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`,
+            ].join('\n');
 
-            \`\`\`hcl
-            ${process.env.PLAN}
-            \`\`\`
-
-            </details>
-
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output
-            })
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(
+              c => c.user.type === 'Bot' && c.body.includes('Terraform Plan')
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: output,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: output,
+              });
+            }
 
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
+      - name: Fail on plan error
+        if: steps.plan.outputs.exit_code != '0'
         run: exit 1
 
+  # ── Apply (write OIDC role, main branch push, protected environment) ─────────
+  apply:
+    name: "Terraform Apply"
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: validate
+    # The 'production' environment must be configured in Settings → Environments
+    # with at least one required reviewer. GitHub will pause the job here and
+    # wait for approval before issuing the OIDC token, which means the apply
+    # role's trust policy (scoped to this environment claim) rejects any attempt
+    # to skip the gate by forging or replaying a token.
+    environment: production
+
+    permissions:
+      contents: read
+      # id-token: write is intentionally absent from the workflow-level
+      # permissions block and added only here — the plan job never receives
+      # a token that could be used to assume the write role.
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: terraform-apply-${{ github.run_id }}
+          role-duration-seconds: 3600
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
+
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -var-file="environments/prod/terraform.tfvars"
+        run: |
+          terraform apply \
+            -auto-approve \
+            -var-file="environments/prod/terraform.tfvars"
         working-directory: ./terraform

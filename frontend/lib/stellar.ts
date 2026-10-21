@@ -27,6 +27,7 @@ import {
 } from "@/lib/network-config";
 import { recordRecentContractInteraction } from "@/lib/recent-contract-interactions";
 import { classifyError, reportContractTx, reportRpcError } from "@/lib/metrics-client";
+import * as Sentry from "@sentry/nextjs";
 import { describeContractError } from "./contract-errors";
 import { TransactionVerifier } from "@/lib/transaction-verifier";
 import { guardSigningRequest } from "@/lib/signing-origin-validator";
@@ -209,6 +210,11 @@ export async function retryQueuedWrites(): Promise<{ succeeded: number; failed: 
 /**
  * Instrumented entry point: records invocation outcome and latency for the
  * Prometheus/Grafana dashboards before handing the result back unchanged.
+ *
+ * A Sentry span is opened for every call so contract RPC timings appear in
+ * Sentry's Performance view. The span carries the contract ID prefix, method,
+ * network, and call type (read/write) as attributes — enough to diagnose slow
+ * or failing RPC calls without attaching any PII.
  */
 export async function callContract(
   contractId: string,
@@ -220,24 +226,54 @@ export async function callContract(
   const network = getActiveNetwork();
   const startedAt = Date.now();
 
-  try {
-    const result = await invokeContract(contractId, method, args, options);
-    if (!options?.readOnly) {
-      reportContractTx(
-        method,
-        result.status === "ERROR" ? "error" : "success",
-        network,
-        Date.now() - startedAt,
-      );
-    }
-    return result;
-  } catch (error) {
-    reportRpcError(classifyError(error), network);
-    if (!options?.readOnly) {
-      reportContractTx(method, "error", network, Date.now() - startedAt);
-    }
-    throw error;
-  }
+  return Sentry.startSpan(
+    {
+      // op follows OpenTelemetry semantic conventions for RPC calls.
+      op: "rpc.soroban",
+      name: `${options?.readOnly ? "simulate" : "invoke"} ${method}`,
+      attributes: {
+        // Truncated contract ID (first 8 chars + ellipsis) — enough to
+        // identify the contract without exposing the full key.
+        "stellar.contract_id": contractId.slice(0, 8) + "…",
+        "stellar.method": method,
+        "stellar.network": network,
+        "stellar.call_type": options?.readOnly ? "read" : "write",
+      },
+    },
+    async (span) => {
+      try {
+        const result = await invokeContract(contractId, method, args, options);
+        const outcome = result.status === "ERROR" ? "error" : "success";
+
+        // Record the outcome on the span so Sentry's Performance view can
+        // filter/aggregate by success vs error without needing a separate alert.
+        span.setAttributes({
+          "stellar.outcome": outcome,
+          "stellar.duration_ms": Date.now() - startedAt,
+        });
+
+        if (!options?.readOnly) {
+          reportContractTx(method, outcome, network, Date.now() - startedAt);
+        }
+        return result;
+      } catch (error) {
+        const kind = classifyError(error);
+        span.setAttributes({
+          "stellar.outcome": "error",
+          "stellar.error_kind": kind,
+          "stellar.duration_ms": Date.now() - startedAt,
+        });
+        // Mark the span as failed so it surfaces in Sentry's error rate charts.
+        span.setStatus({ code: 2 /* ERROR */ });
+
+        reportRpcError(kind, network);
+        if (!options?.readOnly) {
+          reportContractTx(method, "error", network, Date.now() - startedAt);
+        }
+        throw error;
+      }
+    },
+  );
 }
 
 async function simulateReadContract(

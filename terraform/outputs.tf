@@ -17,3 +17,18 @@ output "sns_topic_arn" {
   value       = module.monitoring.sns_topic_arn
   description = "The ARN of the SNS topic for alerts"
 }
+
+output "github_oidc_provider_arn" {
+  value       = module.github_oidc.oidc_provider_arn
+  description = "ARN of the IAM OIDC provider for GitHub Actions"
+}
+
+output "github_terraform_plan_role_arn" {
+  value       = module.github_oidc.terraform_plan_role_arn
+  description = "ARN of the IAM role for terraform plan — copy this into the TERRAFORM_PLAN_ROLE_ARN repository variable"
+}
+
+output "github_terraform_apply_role_arn" {
+  value       = module.github_oidc.terraform_apply_role_arn
+  description = "ARN of the IAM role for terraform apply — copy this into the TERRAFORM_APPLY_ROLE_ARN repository variable"
+}

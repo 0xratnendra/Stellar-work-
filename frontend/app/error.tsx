@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 import { useEffect, useId, useState } from "react";
 
 export default function GlobalError({
@@ -32,7 +33,19 @@ export default function GlobalError({
   });
 
   useEffect(() => {
-     
+    // Report to Sentry with the local reference ID attached as a tag so
+    // support can cross-reference the error ID shown to the user with the
+    // event in the Sentry dashboard.
+    Sentry.captureException(error, {
+      tags: {
+        errorBoundary: "global",
+        errorId,
+        // Attach Next.js digest when present — it identifies the server-side
+        // error that triggered this client boundary.
+        ...(error.digest ? { nextDigest: error.digest } : {}),
+      },
+    });
+
     console.error("[StellarWork]", errorId, error);
   }, [error, errorId]);
 
