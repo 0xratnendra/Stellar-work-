@@ -40,6 +40,12 @@ describe("Command palette interactions", () => {
     expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
   });
 
+  it("opens immediately when mounted after the first shortcut", () => {
+    render(<CommandPalette initialOpen />);
+
+    expect(screen.getByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
+  });
+
   it("filters commands by search query", () => {
     render(<CommandPalette />);
 

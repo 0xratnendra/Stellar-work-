@@ -1,5 +1,5 @@
 import React from "react";
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const mockPush = vi.fn();
@@ -66,6 +66,15 @@ describe("VoiceNav", () => {
     expect(
       screen.getByRole("button", { name: /stop voice navigation/i }),
     ).toBeInTheDocument();
+  });
+
+  it("starts recognition after the lazy-loaded component mounts", async () => {
+    render(<VoiceNav autoStart />);
+
+    await waitFor(() => {
+      expect(mockRecognition.start).toHaveBeenCalledOnce();
+    });
+    expect(screen.getByRole("button", { name: /stop voice navigation/i })).toBeInTheDocument();
   });
 
   it("navigates home on 'go home' command", () => {

@@ -258,6 +258,7 @@ Admin resolves a disputed job. Distributes funds based on `client_bps` share.
 | `get_max_active_jobs_per_client()` | — | `u32` | Max active jobs per client (0 = unlimited). |
 | `get_client_active_jobs_count(client)` | `client: Address` | `u32` | Active job count for a specific client. |
 | `is_token_allowed(token)` | `token: Address` | `bool` | Whether a token is in the whitelist. |
+| `is_token_whitelisted(token)` | `token: Address` | `bool` | Deprecated compatibility alias for `is_token_allowed`. |
 
 ---
 
@@ -270,6 +271,8 @@ Admin resolves a disputed job. Distributes funds based on `client_bps` share.
 | `withdraw_fees(token)` | `token: Address` | Withdraw accrued fees for a token to admin. Admin only. |
 | `add_allowed_token(token)` | `token: Address` | Add a token to the whitelist. Admin only. |
 | `remove_allowed_token(token)` | `token: Address` | Remove a token from the whitelist. Admin only. |
+| `add_token_to_whitelist(token)` | `token: Address` | Deprecated compatibility alias for `add_allowed_token`. |
+| `remove_token_from_whitelist(token)` | `token: Address` | Deprecated compatibility alias for `remove_allowed_token`. |
 | `set_desc_payload_max(caller, max_bytes)` | `caller: Address, max_bytes: u32` | Set max description payload size (32-65,536). Admin only. |
 | `set_max_active_jobs_per_client(caller, limit)` | `caller: Address, limit: u32` | Set max active jobs per client (0 = unlimited). Admin only. |
 | `transfer_admin(caller, new_admin)` | `caller: Address, new_admin: Address` | Transfer admin role. Current admin only. |
