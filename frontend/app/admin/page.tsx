@@ -37,6 +37,7 @@ import {
   validateStellarAddress,
   MAX_ANNOUNCEMENT_MSG_LEN,
 } from "@/lib/sanitize";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   getAllFlagNames,
   getFlagDescription,
@@ -49,6 +50,7 @@ import {
 const TX_LOG_KEY = "stellarwork:admin-withdrawals";
 // #1050 — platform fee change history stored locally
 const FEE_HISTORY_KEY = "stellarwork:admin-fee-history";
+const ADMIN_JOBS_PAGE_SIZE = 50;
 
 interface WithdrawalTx {
   id: string;
@@ -80,6 +82,9 @@ export default function AdminPage() {
   const [fees, setFees] = useState<bigint>(0n);
   const [nativeToken, setNativeToken] = useState<string>("");
   const [jobs, setJobs] = useState<Array<{ id: number; job: Job }>>([]);
+  const [jobCount, setJobCount] = useState(0);
+  const [jobPage, setJobPage] = useState(0);
+  const [jobsLoading, setJobsLoading] = useState(false);
   const [statusCounts, setStatusCounts] = useState<JobStatusCounts>({
     open: 0,
     in_progress: 0,
@@ -144,6 +149,8 @@ export default function AdminPage() {
       const envAdmin = process.env.NEXT_PUBLIC_ADMIN_ADDRESS;
       if (!envAdmin || walletAddress !== envAdmin) {
         setIsAdmin(false);
+        setJobCount(0);
+        setJobs([]);
         setLoading(false);
         return;
       }
@@ -151,17 +158,10 @@ export default function AdminPage() {
       const actualAdmin = envAdmin;
 
       const count = await adminGetJobCount(actualAdmin);
-      setJobs([]);
-      setLoading(true);
-      let fetched: { id: number; job: Awaited<ReturnType<typeof adminGetAllJobs>>[number] }[] = [];
-      try {
-        const limit = 50;
-        const list = await adminGetAllJobs(actualAdmin, 0, Math.max(1, count > limit ? limit : count));
-        fetched = list.map((job, idx) => ({ id: idx + 1, job }));
-        setJobs(fetched);
-      } catch {
-        setJobs([]);
-      }
+      setJobCount(count);
+      setJobPage((currentPage) =>
+        Math.min(currentPage, Math.max(0, Math.ceil(count / ADMIN_JOBS_PAGE_SIZE) - 1)),
+      );
 
       // Fetch status counts in a single contract call instead of
       // iterating all jobs client-side.
@@ -169,19 +169,14 @@ export default function AdminPage() {
         const counts = await getJobStatusCounts();
         setStatusCounts(counts);
       } catch {
-        // Fallback to client-side computation if contract call fails
-        const fallback = fetched.reduce<Record<string, number>>((acc, { job }) => {
-          acc[job.status] = (acc[job.status] || 0) + 1;
-          return acc;
-        }, {});
         setStatusCounts({
-          open: fallback["Open"] || 0,
-          in_progress: fallback["InProgress"] || 0,
-          submitted_for_review: fallback["SubmittedForReview"] || 0,
-          completed: fallback["Completed"] || 0,
-          cancelled: fallback["Cancelled"] || 0,
-          disputed: fallback["Disputed"] || 0,
-          total: fetched.length,
+          open: 0,
+          in_progress: 0,
+          submitted_for_review: 0,
+          completed: 0,
+          cancelled: 0,
+          disputed: 0,
+          total: count,
         });
       }
 
@@ -194,6 +189,48 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!wallet || isAdmin !== true) return;
+    const actualAdmin = process.env.NEXT_PUBLIC_ADMIN_ADDRESS;
+    if (!actualAdmin) return;
+
+    const pageCount = Math.ceil(jobCount / ADMIN_JOBS_PAGE_SIZE);
+    if (jobPage >= pageCount && jobPage > 0) {
+      setJobPage(Math.max(0, pageCount - 1));
+      return;
+    }
+    if (jobCount === 0) {
+      setJobs([]);
+      setJobsLoading(false);
+      return;
+    }
+
+    const startIndex = jobPage * ADMIN_JOBS_PAGE_SIZE;
+    const limit = Math.min(ADMIN_JOBS_PAGE_SIZE, jobCount - startIndex);
+    let cancelled = false;
+    setJobsLoading(true);
+    setJobs([]);
+    adminGetAllJobs(actualAdmin, startIndex, limit)
+      .then((list) => {
+        if (!cancelled) {
+          setJobs(list.map((job, index) => ({ id: startIndex + index + 1, job })));
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setJobs([]);
+          setError(e instanceof Error ? e.message : "Failed to load jobs.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setJobsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [wallet, isAdmin, jobCount, jobPage]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -244,6 +281,9 @@ export default function AdminPage() {
       setIsAdmin(null);
       setFees(0n);
       setJobs([]);
+      setJobCount(0);
+      setJobPage(0);
+      setJobsLoading(false);
       setStatusCounts({ open: 0, in_progress: 0, submitted_for_review: 0, completed: 0, cancelled: 0, disputed: 0, total: 0 });
       setError(null);
       setSuccessMessage(null);
