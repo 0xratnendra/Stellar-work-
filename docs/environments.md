@@ -12,7 +12,7 @@ Create `frontend/.env.local` from `frontend/.env.example` for local development.
 | `NEXT_PUBLIC_NETWORK` | No | `testnet` | `frontend/lib/stellar.ts` | Selects the Stellar network passphrase and explorer links. Set to `mainnet` for public network; any other value uses Testnet. |
 | `NEXT_PUBLIC_SOROBAN_RPC` | No | `https://soroban-testnet.stellar.org` | `frontend/lib/stellar.ts` | Soroban RPC endpoint used for simulations, reads, and transaction submission. Set this explicitly for Mainnet. |
 | `NEXT_PUBLIC_NATIVE_TOKEN` | No | Empty string | `frontend/app/post-job/page.tsx` | Optional token contract address used to prefill the Post Job form. Users can still type a token address manually. |
-| `NEXT_PUBLIC_ADMIN_ADDRESS` | No | Empty string | `frontend/app/navigation.tsx`, `frontend/app/admin/page.tsx` | Admin Stellar address. When set, the Admin link is shown only to that connected wallet. |
+| `NEXT_PUBLIC_ADMIN_ADDRESS` | No | Empty string | `frontend/app/navigation.tsx`, `frontend/app/admin/page.tsx` | Admin Stellar address (starting with `G`). When set, the Admin link and panel are accessible only to this exact connected wallet (case-sensitive). When unset, admin features and navigation links are hidden and mutating actions are disabled for safety. |
 
 ### Build-Time Validation (#645)
 
@@ -52,7 +52,7 @@ All environment variables are prefixed with `NEXT_PUBLIC_` to make them availabl
 |----------|-------------|---------|-------|
 | `NEXT_PUBLIC_NETWORK` | Target Stellar network | `testnet` | Controls network passphrase and explorer URLs. Set to `mainnet` for production. |
 | `NEXT_PUBLIC_SOROBAN_RPC` | Soroban RPC endpoint URL | `https://soroban-testnet.stellar.org` | Used in `frontend/lib/stellar.ts` for RPC connections |
-| `NEXT_PUBLIC_ADMIN_ADDRESS` | Admin wallet address for admin panel access | *None* | Controls visibility of admin features in navigation, disputes, and admin pages |
+| `NEXT_PUBLIC_ADMIN_ADDRESS` | Admin wallet address for admin panel access | *None* | Controls access to admin features. When set, access is granted only to this exact case-sensitive address. When unset, admin features are disabled for safety. |
 | `NEXT_PUBLIC_NATIVE_TOKEN` | Default native token contract address | *None* | Pre-fills the token address field in the post-job form |
 
 ### Deprecated/Documented Variables
@@ -188,6 +188,35 @@ For mainnet deployment:
 4. Update `NEXT_PUBLIC_CONTRACT_ID` to mainnet contract ID
 5. Set `NEXT_PUBLIC_ADMIN_ADDRESS` if admin access is restricted
 6. Verify explorer URLs point to mainnet
+
+## Access Control & Exact Match Requirements
+
+### `NEXT_PUBLIC_ADMIN_ADDRESS` Exact Match & Case Sensitivity
+
+Access to administrative controls (the Admin navigation link and the `/admin` management dashboard) is strictly gated by the `NEXT_PUBLIC_ADMIN_ADDRESS` environment variable:
+
+- **Case-Sensitive Comparison**: Stellar public keys (56-character base32 strings beginning with `G`) are evaluated using strict equality (`walletAddress === envAdmin`). A case mismatch or truncated address will fail authentication.
+- **Unset Safety Behavior**: When `NEXT_PUBLIC_ADMIN_ADDRESS` is unset or empty, the application disables all admin features for safety. The "Admin" navigation link is hidden, and direct access to `/admin` renders an access-denied state.
+- **Client-Side Baking**: Because Next.js App Router bakes `NEXT_PUBLIC_*` variables into static assets during build time, changes to this variable require restarting the local development server (`npm run dev`) or triggering a frontend redeployment in production.
+
+### Troubleshooting: Admin Link Does Not Appear
+
+If `NEXT_PUBLIC_ADMIN_ADDRESS` has been set in your environment configuration but the "Admin" link does not appear in the navigation bar:
+
+1. **Verify Exact Case & Formatting**: Compare your connected Freighter address character-by-character with the value in `.env.local` or your hosting environment. Ensure there are no accidental spaces, leading/trailing whitespace, or quotes around the address.
+2. **Confirm Wallet Connection**: The Admin navigation link only renders once a wallet is actively connected to the site. If no wallet is connected, the link remains hidden.
+3. **Verify Variable Name Prefix**: Ensure the variable is prefixed with `NEXT_PUBLIC_` (i.e. `NEXT_PUBLIC_ADMIN_ADDRESS`, not `ADMIN_ADDRESS`). Variables without this prefix are not bundled into client-side JavaScript.
+4. **Dev Server Restart / Build Invalidation**: When modifying `frontend/.env.local`, you must stop and restart the Next.js development server (`npm run dev`). If deploying to production (e.g. Vercel, Docker, Kubernetes), trigger a new build and redeploy.
+
+### Checklist: Updating Admin Address After Ownership Transfer
+
+When performing a platform contract admin rotation or transferring governance ownership:
+
+- [ ] **1. Execute On-Chain Transfer**: Call `transfer_admin` on the Soroban escrow contract and ensure the transaction confirms on-chain.
+- [ ] **2. Update Environment Configuration**: Update `NEXT_PUBLIC_ADMIN_ADDRESS` to the new admin's Stellar public key in `frontend/.env.local` (local), Kubernetes ConfigMaps, or Vercel environment variables.
+- [ ] **3. Trigger Frontend Rebuild & Deploy**: Re-run `npm run build` or trigger a deployment pipeline so the new public key is baked into client bundles.
+- [ ] **4. Verify New Admin Access**: Connect with the new admin wallet and verify that the "Admin" navigation link appears and fee withdrawal/dispute resolution tools load successfully.
+- [ ] **5. Confirm Old Admin Locked Out**: Connect with the retired admin wallet and verify that the "Admin" link is gone and visiting `/admin` directly displays "Access Denied".
 
 ## Common Issues
 

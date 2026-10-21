@@ -43,7 +43,8 @@ frontend/
 │   ├── disputes-loader.ts # Dispute data aggregation
 │   ├── modal.ts          # Modal focus trap utility
 │   ├── recent-ids.ts     # Job ID caching for pagination
-│   └── recent-searches.ts # Search history management
+│   ├── recent-searches.ts # Search history management
+│   └── feature-flags.ts  # Feature flag evaluation and local overrides
 ├── __tests__/            # Vitest unit tests
 └── e2e/                  # Playwright E2E tests
 ```
@@ -179,6 +180,10 @@ if (!result.valid) {
 ```
 
 See `docs/environments.md` for the full variable reference.
+
+## Feature Flags
+
+StellarWork uses a client-side feature flag layer (`frontend/lib/feature-flags.ts`) to enable gradual rollouts, runtime administration, URL parameter testing, and safe fallbacks. Complete documentation of flag definitions, priority precedence, lifecycle, and implementation steps is in [docs/FEATURE_FLAGS.md](./FEATURE_FLAGS.md).
 
 ## Responsive Design
 

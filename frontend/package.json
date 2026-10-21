@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "check-translations": "node ../scripts/check-translations.mjs",
     "validate-env": "node scripts/validate-env.mjs",
     "prebuild": "npm run validate-env",
     "build": "next build",

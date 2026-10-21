@@ -12,7 +12,7 @@ groups:
           description: >-
             Prometheus has not been able to scrape {{ $labels.instance }} for 5
             minutes. The app may be down or the /api/metrics route is failing.
-          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/OPS_RUNBOOK.md
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#frontendtargetdown
 
       - alert: SyntheticProbeFailing
         expr: probe_success{job="blackbox-http"} == 0
@@ -23,6 +23,7 @@ groups:
         annotations:
           summary: Synthetic probe failing for {{ $labels.probe }}
           description: The blackbox probe for {{ $labels.instance }} has failed for 5 minutes.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#syntheticprobefailing
 
   - name: stellarwork-contracts
     rules:
@@ -42,7 +43,7 @@ groups:
           description: >-
             More than 10% of Soroban invocations have failed over the last 10
             minutes. Check RPC health, escrow contract state, and wallet errors.
-          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/OPS_RUNBOOK.md
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#contracttxfailureratehigh
 
       - alert: ContractTxLatencyHigh
         expr: |
@@ -57,6 +58,7 @@ groups:
         annotations:
           summary: p95 contract transaction latency above 20s
           description: Soroban invocations are slow — likely RPC congestion or network issues.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#contracttxlatencyhigh
 
       - alert: RpcErrorSpike
         expr: sum(rate(stellarwork_rpc_errors_total[5m])) > 0.5
@@ -69,6 +71,7 @@ groups:
           description: >-
             {{ $value | printf "%.2f" }} RPC errors/sec over the last 5 minutes,
             grouped by kind in the StellarWork Overview dashboard.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#rpcerrorspike
 
   - name: stellarwork-frontend-performance
     rules:
@@ -85,6 +88,7 @@ groups:
         annotations:
           summary: p75 LCP above the 2.5s Core Web Vitals threshold
           description: Largest Contentful Paint has regressed for real users over the last 30 minutes.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#lcpregression
 
       - alert: InpRegression
         expr: |
@@ -99,6 +103,7 @@ groups:
         annotations:
           summary: p75 INP above the 200ms Core Web Vitals threshold
           description: Interaction latency has regressed for real users over the last 30 minutes.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#inpregression
 
       - alert: ClientErrorSpike
         expr: sum(rate(stellarwork_client_errors_total[5m])) > 1
@@ -111,6 +116,7 @@ groups:
           description: >-
             {{ $value | printf "%.2f" }} client errors/sec over the last 5
             minutes. Check the error breakdown panel by kind and path.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#clienterrorspike
 
   - name: stellarwork-http-health
     rules:
@@ -130,6 +136,7 @@ groups:
           description: >-
             More than 1% of HTTP responses returned 4xx/5xx status codes over
             the last 10 minutes. Check the HTTP errors panel by route.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#httperrorratehigh
 
       - alert: HttpLatencyHigh
         expr: |
@@ -146,3 +153,4 @@ groups:
           description: >-
             Server-side HTTP request processing at p95 exceeds 3 seconds.
             Investigate slow API routes or upstream Stellar RPC latency.
+          runbook_url: https://github.com/anumukul/Stellar-work-/blob/main/docs/alert-response-playbooks.md#httplatencyhigh

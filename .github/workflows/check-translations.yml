@@ -1,0 +1,35 @@
+name: Translation Parity & Usage Check
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/messages/**'
+      - 'scripts/check-translations.mjs'
+      - '.github/workflows/check-translations.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/messages/**'
+      - 'scripts/check-translations.mjs'
+      - '.github/workflows/check-translations.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-translations:
+    name: Validate Translation Catalogs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify Translation Key Parity & Usage
+        run: node scripts/check-translations.mjs
