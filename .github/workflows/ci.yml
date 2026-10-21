@@ -38,8 +38,12 @@ jobs:
           targets: wasm32-unknown-unknown
           components: rustfmt
 
-      - name: Check formatting
+      - name: Check formatting (escrow)
         working-directory: contracts/escrow/
+        run: cargo fmt --all -- --check
+
+      - name: Check formatting (retainer)
+        working-directory: contracts/retainer/
         run: cargo fmt --all -- --check
 
       - name: Cache Cargo
@@ -51,7 +55,8 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             contracts/escrow/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/escrow/Cargo.lock') }}
+            contracts/retainer/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/escrow/Cargo.lock', 'contracts/retainer/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -61,12 +66,20 @@ jobs:
             cargo install soroban-cli --locked
           fi
 
-      - name: Build contract
+      - name: Build contract (escrow)
         working-directory: contracts/escrow/
         run: soroban contract build
 
-      - name: Run tests
+      - name: Build contract (retainer)
+        working-directory: contracts/retainer/
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Run escrow tests
         working-directory: contracts/escrow/
+        run: cargo test
+
+      - name: Run retainer tests
+        working-directory: contracts/retainer/
         run: cargo test
 
   reproducible-build:
