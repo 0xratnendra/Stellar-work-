@@ -21,19 +21,25 @@ vi.mock("next/navigation", () => ({
 
 const mockGetJobCount = vi.fn();
 const mockGetJob = vi.fn();
+const mockGetDescriptionCid = vi.fn();
+const mockFetchFromIpfs = vi.fn();
 
 vi.mock("@/lib/contract", () => ({
   getJobCount: (...args: unknown[]) => mockGetJobCount(...args),
   getJob: (...args: unknown[]) => mockGetJob(...args),
   acceptJob: vi.fn(),
   freelancerCancelJob: vi.fn(),
-  getDescriptionCid: vi.fn(),
+  getDescriptionCid: (...args: unknown[]) => mockGetDescriptionCid(...args),
   storeDescriptionCid: vi.fn(),
 }));
 
 vi.mock("@/lib/ipfs-service", () => ({
   uploadToIpfs: vi.fn(),
-  fetchFromIpfs: vi.fn(),
+  fetchFromIpfs: (...args: unknown[]) => mockFetchFromIpfs(...args),
+}));
+
+vi.mock("@/lib/crypto", () => ({
+  verifyHtmlMatchesHash: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/lib/wallet-context", () => ({
@@ -306,6 +312,31 @@ describe("Home page job listing after getJobCount", () => {
     expect(mockGetJobCount).toHaveBeenCalledTimes(1);
     expect(mockGetJob).toHaveBeenCalledTimes(2);
     expect(screen.getAllByRole("heading", { name: /^Job #/ })).toHaveLength(2);
+  });
+
+  it("renders job cards while the description CID lookup is still pending", async () => {
+    mockGetJobCount.mockResolvedValue(1);
+    mockGetJob.mockResolvedValue({
+      client: "GCLIENT",
+      freelancer: null,
+      amount: "10000000",
+      description_hash: "description-hash",
+      status: "Open",
+      created_at: "1710000000",
+      deadline: "0",
+      token: "GTOKEN",
+      revision_count: 0,
+      submitted_at: "0",
+    });
+    mockGetDescriptionCid.mockReturnValue(new Promise(() => {}));
+
+    render(<HomePage />);
+
+    expect(await screen.findByRole("heading", { name: "Job #1" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockGetDescriptionCid).toHaveBeenCalledWith("description-hash");
+    });
+    expect(mockFetchFromIpfs).not.toHaveBeenCalled();
   });
 
   it("handles partial fetch failures gracefully", async () => {
