@@ -89,6 +89,20 @@ topk(5, histogram_quantile(0.95,
 
 ## Alerts
 
+Defined in [`monitoring/prometheus/alerts.yml`](../monitoring/prometheus/alerts.yml). For complete operational triage, diagnostic commands, mitigation steps, and escalation paths for each alert, see the [**Alert Response Playbooks**](./alert-response-playbooks.md).
+
+| Alert | Severity | Condition | Response Playbook |
+| ----- | -------- | --------- | ----------------- |
+| `FrontendTargetDown` | critical | Scrape target down for 5m | [Playbook](./alert-response-playbooks.md#frontendtargetdown) |
+| `SyntheticProbeFailing` | critical | Blackbox probe failing for 5m | [Playbook](./alert-response-playbooks.md#syntheticprobefailing) |
+| `ContractTxFailureRateHigh` | critical | >10% invocation failures over 10m | [Playbook](./alert-response-playbooks.md#contracttxfailureratehigh) |
+| `ContractTxLatencyHigh` | warning | p95 latency >20s for 15m | [Playbook](./alert-response-playbooks.md#contracttxlatencyhigh) |
+| `RpcErrorSpike` | warning | >0.5 RPC errors/sec for 10m | [Playbook](./alert-response-playbooks.md#rpcerrorspike) |
+| `LcpRegression` | warning | p75 LCP >2.5s for 30m | [Playbook](./alert-response-playbooks.md#lcpregression) |
+| `InpRegression` | warning | p75 INP >200ms for 30m | [Playbook](./alert-response-playbooks.md#inpregression) |
+| `ClientErrorSpike` | warning | >1 client error/sec for 10m | [Playbook](./alert-response-playbooks.md#clienterrorspike) |
+| `HttpErrorRateHigh` | warning | >1% HTTP 4xx/5xx responses for 10m | [Playbook](./alert-response-playbooks.md#httperrorratehigh) |
+| `HttpLatencyHigh` | warning | p95 HTTP latency >3s for 15m | [Playbook](./alert-response-playbooks.md#httplatencyhigh) |
 Defined in [`monitoring/prometheus/alerts.yml`](../monitoring/prometheus/alerts.yml).
 
 | Alert | Severity | Condition |

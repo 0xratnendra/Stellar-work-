@@ -139,21 +139,31 @@ Only add gender variants if the difference is meaningful in context. Do not intr
 
 Decide on one register per locale and apply it consistently throughout the file. Most locales should use the informal/familiar form unless the target culture strongly prefers formal address.
 
-## Checking for Missing Keys
+## Automated Translation Verification & CI Check
 
-To check that your locale file has all keys from the reference, you can run a quick diff:
+StellarWork enforces translation catalog parity via an automated CI check (`.github/workflows/check-translations.yml`) powered by `scripts/check-translations.mjs`.
+
+The check validates:
+1. **Locale Parity (Strict)**: Bidirectionally compares every locale catalog (`frontend/messages/*.json`) against the reference (`frontend/messages/en.json`). Every key in `en.json` must exist in other locales, and no orphaned/extra keys may exist. Any discrepancy causes the CI build to fail.
+2. **Unused Key Reporting (Advisory)**: Scans all frontend components, hooks, and utilities for references to translation keys. Any keys defined in catalogs that are not referenced in code are flagged with GitHub Actions annotations and listed in the job summary.
+
+### Running the Check Locally
+
+You can run the verification script before opening a pull request:
 
 ```bash
-# List keys in en.json
-node -e "
-  const en = require('./frontend/messages/en.json');
-  const target = require('./frontend/messages/<locale>.json');
-  const flat = (obj, prefix='') => Object.entries(obj).flatMap(([k,v]) =>
-    typeof v === 'object' ? flat(v, prefix+k+'.') : [prefix+k]);
-  const missing = flat(en).filter(k => !flat(target).includes(k));
-  console.log(missing.length ? 'Missing: ' + missing.join(', ') : 'All keys present');
-"
+# From repository root:
+node scripts/check-translations.mjs
+
+# Or from frontend/:
+cd frontend && npm run check-translations
 ```
+
+### Resolving CI Translation Failures
+
+- **Missing Keys in Target Locale**: If CI reports keys missing from `<locale>.json`, add them under the exact same JSON key path as `en.json`.
+- **Orphaned / Extra Keys in Target Locale**: If an English string was deleted or refactored, remove the corresponding deleted key from your locale JSON catalog.
+- **Unused Key Warnings**: Review the flagged keys. If they are no longer in use anywhere in the frontend, clean them up from both `en.json` and other locale catalogs.
 
 ## Submitting a Translation
 
