@@ -166,8 +166,17 @@ The admin key controls:
 - Fee withdrawal (`withdraw_fees`)
 - Dispute resolution (`resolve_dispute`)
 - Contract upgrades (`propose_upgrade`, `execute_upgrade`)
-- Token management (`add_allowed_token`, `remove_allowed_token`)
+- Token management (`add_allowed_token`, `remove_allowed_token`, `remove_allowed_token_override`)
 - Admin transfer (`transfer_admin`)
+
+#### Token Retirement Procedure (SC-168)
+Before retiring or removing a token from the allowlist:
+1. Query active escrow count:
+   `soroban contract invoke --id $CONTRACT_ID --network $NETWORK -- get_token_active_escrow_count --token $TOKEN_ADDRESS`
+2. If `active_jobs > 0`, the token CANNOT be removed. Attempting to call `remove_allowed_token` will panic with error `TokenInUse` (code 56) and emit `token_in_use`. Wait for in-flight jobs to complete, cancel, or settle before retiring the token.
+3. If `active_jobs == 0`, invoke `remove_allowed_token`:
+   `soroban contract invoke --id $CONTRACT_ID --network $NETWORK --source admin -- remove_allowed_token --token $TOKEN_ADDRESS`
+4. The admin override `remove_allowed_token_override` is only valid when active escrow count is zero and strictly refuses removal if funds remain in escrow.
 
 **Backup procedure:**
 

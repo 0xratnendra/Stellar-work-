@@ -67,7 +67,11 @@ This document provides a quick reference for the `EscrowContract` methods, expec
 | `update_fee_bps` | `new_fee_bps: i128` | Updates the fee (requires admin auth). |
 | `withdraw_fees` | `token: Address` | Transfers accrued fees to the admin (requires admin auth). |
 | `add_allowed_token` | `token: Address` | Adds a token to the allowed-token registry (requires admin auth). |
-| `remove_allowed_token` | `token: Address` | Removes a token from the allowed-token registry (requires admin auth). |
+| `remove_allowed_token` | `token: Address` | Removes a token from the registry (requires admin auth; blocked with `TokenInUse` if active escrow jobs exist). |
+| `remove_allowed_token_override` | `token: Address`, `zero_balance_override: bool` | Explicit admin override for zero-balance removal; funded escrows cannot be bypassed. |
+| `get_token_active_escrow_count` | `token: Address` | Returns the count of active escrow jobs currently holding this token. |
+| `get_allowed_tokens` | - | Returns a stable, sorted list of all currently allowed payment tokens. |
+| `get_user_profile_summary` | `address: Address` | Returns `ProfileSummary` (completed/active jobs, rating aggregate, verification status, and access status) in O(1). |
 | `is_token_allowed` | `token: Address` | Returns whether a token is allowed. |
 
 The `add_token_to_whitelist`, `remove_token_from_whitelist`, and
