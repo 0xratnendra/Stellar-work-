@@ -290,6 +290,52 @@ export async function removeAllowedToken(tokenAddress: string) {
   ]);
 }
 
+export async function removeAllowedTokenOverride(tokenAddress: string, zeroBalanceOverride: boolean = true) {
+  return callContract(getActiveContractId(), "remove_allowed_token_override", [
+    nativeToScVal(tokenAddress, { type: "address" }),
+    nativeToScVal(zeroBalanceOverride, { type: "bool" }),
+  ]);
+}
+
+export async function getTokenActiveEscrowCount(tokenAddress: string): Promise<number> {
+  const response = await callContract(
+    getActiveContractId(),
+    "get_token_active_escrow_count",
+    [nativeToScVal(tokenAddress, { type: "address" })],
+    { readOnly: true },
+  );
+  return Number(response.data ?? 0);
+}
+
+export async function getAllowedTokens(): Promise<string[]> {
+  const response = await callContract(
+    getActiveContractId(),
+    "get_allowed_tokens",
+    [],
+    { readOnly: true },
+  );
+  return Array.isArray(response.data) ? response.data : [];
+}
+
+export interface UserProfileSummary {
+  completedJobs: number;
+  activeJobs: number;
+  averageRating: number;
+  ratingCount: number;
+  isVerified: boolean;
+  accessStatus: number;
+}
+
+export async function getUserProfileSummary(address: string): Promise<UserProfileSummary | null> {
+  const response = await callContract(
+    getActiveContractId(),
+    "get_user_profile_summary",
+    [nativeToScVal(address, { type: "address" })],
+    { readOnly: true },
+  );
+  return (response.data as UserProfileSummary) ?? null;
+}
+
 export async function isTokenAllowed(tokenAddress: string): Promise<boolean> {
   const response = await callContract(
     getActiveContractId(),

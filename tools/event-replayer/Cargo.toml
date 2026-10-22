@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[lib]
+name = "event_replayer"
+path = "src/lib.rs"
+
 [[bin]]
 name = "event-replayer"
 path = "src/main.rs"

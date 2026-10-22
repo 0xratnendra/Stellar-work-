@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
+use event_replayer::{
+    load_dataset_from_file, replay_events, ReplayDataset, ReplayEvent,
+};
 use soroban_rpc::{Client, EventsRequest};
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -16,7 +17,7 @@ struct Args {
 
     /// Contract ID to fetch events from
     #[arg(short, long)]
-    contract_id: String,
+    contract_id: Option<String>,
 
     /// Start timestamp (ISO 8601 format)
     #[arg(short, long)]
@@ -31,39 +32,20 @@ struct Args {
     event_type: Option<String>,
 
     /// Output file for replay data
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "events.json")]
     output: PathBuf,
 
     /// Generate sample replay dataset from testnet
     #[arg(long)]
     sample: bool,
-}
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ReplayEvent {
-    timestamp: DateTime<Utc>,
-    event_type: String,
-    contract_id: String,
-    topic: Vec<String>,
-    data: serde_json::Value,
-}
+    /// Offline mode: replay events from a local file without RPC network access
+    #[arg(long)]
+    offline: bool,
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ReplayDataset {
-    contract_id: String,
-    network: String,
-    start_time: DateTime<Utc>,
-    end_time: DateTime<Utc>,
-    events: Vec<ReplayEvent>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ReplayReport {
-    dataset: ReplayDataset,
-    events_processed: usize,
-    state_transitions: Vec<String>,
-    final_balances: HashMap<String, String>,
-    summary: String,
+    /// Input dataset JSON file for offline replay
+    #[arg(short, long)]
+    input: Option<PathBuf>,
 }
 
 async fn fetch_events(
@@ -76,13 +58,13 @@ async fn fetch_events(
     let client = Client::new(rpc_url);
     let mut events = Vec::new();
 
-    let start_ledger = start_time.map(|_| 0u32); // Simplified - in production, map time to ledger
-    let end_ledger = end_time.map(|_| u32::MAX); // Simplified
+    let start_ledger = start_time.map(|_| 0u32);
+    let end_ledger = end_time.map(|_| u32::MAX);
 
     let request = EventsRequest {
         start_ledger,
         end_ledger,
-        filter: None, // In production, add contract ID filter
+        filter: None,
     };
 
     let response = client
@@ -91,14 +73,12 @@ async fn fetch_events(
         .context("Failed to fetch events from RPC")?;
 
     for event in response.events {
-        // Filter by contract ID
         if let Some(contract) = event.contract_id.as_ref() {
             if contract.to_string() != contract_id {
                 continue;
             }
         }
 
-        // Filter by event type
         if let Some(filter) = event_type_filter {
             if !event.topics.iter().any(|t| t.to_string().contains(filter)) {
                 continue;
@@ -106,16 +86,16 @@ async fn fetch_events(
         }
 
         let replay_event = ReplayEvent {
-            timestamp: Utc::now(), // Simplified - use event timestamp in production
+            timestamp: Utc::now(),
             event_type: event
                 .topics
                 .first()
                 .map(|t| t.to_string())
-                .unwrap_or("unknown".to_string()),
+                .unwrap_or_else(|| "unknown".to_string()),
             contract_id: event
                 .contract_id
                 .map(|c| c.to_string())
-                .unwrap_or(contract_id.to_string()),
+                .unwrap_or_else(|| contract_id.to_string()),
             topic: event.topics.iter().map(|t| t.to_string()).collect(),
             data: serde_json::to_value(&event.value).unwrap_or(serde_json::Value::Null),
         };
@@ -123,7 +103,6 @@ async fn fetch_events(
         events.push(replay_event);
     }
 
-    // Sort chronologically
     events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 
     Ok(events)
@@ -162,7 +141,7 @@ async fn generate_sample_dataset(output: PathBuf) -> Result<()> {
                 event_type: "job_approved".to_string(),
                 contract_id: "SAMPLE_CONTRACT_ID".to_string(),
                 topic: vec!["job_approved".to_string()],
-                data: serde_json::json!({"job_id": 1, "payout": 975000}),
+                data: serde_json::json!({"job_id": 1, "payout": 975000, "fee": 25000}),
             },
         ],
     };
@@ -171,52 +150,6 @@ async fn generate_sample_dataset(output: PathBuf) -> Result<()> {
     fs::write(&output, json)?;
     println!("Sample dataset written to: {}", output.display());
     Ok(())
-}
-
-async fn replay_events(dataset: &ReplayDataset) -> Result<ReplayReport> {
-    let mut state_transitions = Vec::new();
-    let mut final_balances = HashMap::new();
-
-    for event in &dataset.events {
-        state_transitions.push(format!(
-            "{}: {}",
-            event.timestamp.format("%Y-%m-%d %H:%M:%S"),
-            event.event_type
-        ));
-
-        // Simulate state changes based on event type
-        match event.event_type.as_str() {
-            "job_posted" => {
-                *final_balances
-                    .entry("contract_balance".to_string())
-                    .or_insert(0i64.to_string()) += 1000000;
-            }
-            "job_approved" => {
-                *final_balances
-                    .entry("contract_balance".to_string())
-                    .or_insert(0i64.to_string()) -= 975000;
-                *final_balances
-                    .entry("platform_fees".to_string())
-                    .or_insert(0i64.to_string()) += 25000;
-            }
-            _ => {}
-        }
-    }
-
-    let report = ReplayReport {
-        dataset: dataset.clone(),
-        events_processed: dataset.events.len(),
-        state_transitions,
-        final_balances,
-        summary: format!(
-            "Processed {} events from {} to {}",
-            dataset.events.len(),
-            dataset.start_time.format("%Y-%m-%d"),
-            dataset.end_time.format("%Y-%m-%d")
-        ),
-    };
-
-    Ok(report)
 }
 
 #[tokio::main]
@@ -228,54 +161,66 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let start_time = args
-        .start_time
-        .as_ref()
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&Utc));
+    let dataset = if args.offline || args.input.is_some() {
+        let input_path = args
+            .input
+            .or_else(|| Some(args.output.clone()))
+            .context("Please specify an input fixture dataset path via --input <PATH>")?;
+        println!("Offline mode: Replaying dataset from {}", input_path.display());
+        load_dataset_from_file(&input_path)?
+    } else {
+        let contract_id = args
+            .contract_id
+            .context("--contract-id is required when fetching events online from RPC")?;
+        let start_time = args
+            .start_time
+            .as_ref()
+            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&Utc));
 
-    let end_time = args
-        .end_time
-        .as_ref()
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&Utc));
+        let end_time = args
+            .end_time
+            .as_ref()
+            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&Utc));
 
-    println!("Fetching events from contract: {}", args.contract_id);
-    println!("RPC URL: {}", args.rpc_url);
+        println!("Fetching events from contract: {}", contract_id);
+        println!("RPC URL: {}", args.rpc_url);
 
-    let events = fetch_events(
-        &args.rpc_url,
-        &args.contract_id,
-        start_time,
-        end_time,
-        args.event_type.as_deref(),
-    )
-    .await?;
+        let events = fetch_events(
+            &args.rpc_url,
+            &contract_id,
+            start_time,
+            end_time,
+            args.event_type.as_deref(),
+        )
+        .await?;
 
-    if events.is_empty() {
-        println!("No events found matching the criteria.");
-        return Ok(());
-    }
+        if events.is_empty() {
+            println!("No events found matching the criteria.");
+            return Ok(());
+        }
 
-    let dataset = ReplayDataset {
-        contract_id: args.contract_id.clone(),
-        network: if args.rpc_url.contains("testnet") {
-            "testnet".to_string()
-        } else {
-            "mainnet".to_string()
-        },
-        start_time: start_time.unwrap_or_else(|| events.first().unwrap().timestamp),
-        end_time: end_time.unwrap_or_else(|| events.last().unwrap().timestamp),
-        events,
+        let dataset = ReplayDataset {
+            contract_id: contract_id.clone(),
+            network: if args.rpc_url.contains("testnet") {
+                "testnet".to_string()
+            } else {
+                "mainnet".to_string()
+            },
+            start_time: start_time.unwrap_or_else(|| events.first().unwrap().timestamp),
+            end_time: end_time.unwrap_or_else(|| events.last().unwrap().timestamp),
+            events,
+        };
+
+        let json = serde_json::to_string_pretty(&dataset)?;
+        fs::write(&args.output, json)?;
+        println!("Dataset written to: {}", args.output.display());
+        dataset
     };
 
-    let json = serde_json::to_string_pretty(&dataset)?;
-    fs::write(&args.output, json)?;
-    println!("Dataset written to: {}", args.output.display());
-
-    // Run replay and generate report
     println!("\nRunning event replay...");
-    let report = replay_events(&dataset).await?;
+    let report = replay_events(&dataset)?;
 
     println!("\n=== Replay Report ===");
     println!("{}", report.summary);
@@ -288,7 +233,6 @@ async fn main() -> Result<()> {
         println!("  {}: {}", key, value);
     }
 
-    // Write report to file
     let report_path = args.output.with_extension("report.json");
     let report_json = serde_json::to_string_pretty(&report)?;
     fs::write(&report_path, report_json)?;

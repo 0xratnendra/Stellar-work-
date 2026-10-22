@@ -1,0 +1,46 @@
+name: Event Replayer CI
+
+on:
+  push:
+    paths:
+      - 'tools/event-replayer/**'
+      - 'contracts/escrow/**'
+      - '.github/workflows/event-replayer.yml'
+  pull_request:
+    paths:
+      - 'tools/event-replayer/**'
+      - 'contracts/escrow/**'
+      - '.github/workflows/event-replayer.yml'
+
+jobs:
+  test-event-replayer:
+    name: Event Replayer Offline Fixture Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            tools/event-replayer/target/
+          key: ${{ runner.os }}-cargo-replayer-${{ hashFiles('tools/event-replayer/Cargo.lock', 'tools/event-replayer/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-replayer-
+
+      - name: Run event replayer tests
+        run: |
+          cd tools/event-replayer
+          cargo test --verbose
+
+      - name: Replay offline fixture via binary
+        run: |
+          cd tools/event-replayer
+          cargo run -- --offline --input fixtures/valid-job-lifecycle.json --output target/replayed.json
