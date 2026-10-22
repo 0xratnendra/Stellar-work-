@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import TruncatedAddress from "@/components/TruncatedAddress";
+import AriaLiveRegion from "@/components/AriaLiveRegion";
 import { useWallet } from "@/lib/wallet-context";
 import { useMessaging } from "@/lib/messaging-context";
 import PullToRefresh from "@/components/PullToRefresh";
@@ -19,7 +20,7 @@ import { sanitizePlainText } from "@/lib/sanitize";
 
 function EmptyInbox() {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-20 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-20 text-center" role="status">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
         <svg className="h-7 w-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -31,7 +32,7 @@ function EmptyInbox() {
       </p>
       <Link
         href="/"
-        className="mt-5 rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-700 transition-colors"
+        className="mt-5 rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500"
       >
         Browse Jobs
       </Link>
@@ -45,31 +46,35 @@ function ConversationRow({
   convo,
   myAddress,
   onDelete,
+  linkRef,
 }: {
   convo: ConversationMeta;
   myAddress: string;
   onDelete: (peer: string) => void;
+  linkRef?: (el: HTMLAnchorElement | null) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const isMine = convo.lastMessageFrom === myAddress;
 
   return (
-    <li className="group relative">
+    <li className="group relative" role="listitem">
       <Link
+        ref={linkRef}
         href={`/messages/${convo.peerAddress}`}
-        className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition-colors hover:border-slate-300 hover:bg-slate-50"
-        aria-label={`Conversation with ${shortAddr(convo.peerAddress)}${convo.unreadCount > 0 ? `, ${convo.unreadCount} unread` : ""}`}
+        className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition-colors hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-500"
+        aria-label={`Conversation with ${shortAddr(convo.peerAddress)}${convo.unreadCount > 0 ? `, ${convo.unreadCount} unread` : ""}. Last message: ${convo.lastMessageSnippet || "No messages yet"}`}
+        aria-current={convo.unreadCount > 0 ? "true" : undefined}
       >
         {/* Avatar */}
-        <div className="relative shrink-0">
+        <div className="relative shrink-0" aria-hidden="true">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-500 text-sm font-bold text-white select-none">
             {convo.peerAddress.slice(1, 3).toUpperCase()}
           </div>
           {convo.unreadCount > 0 && (
             <span
               className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white"
-              aria-label={`${convo.unreadCount} unread`}
             >
+              <span className="sr-only">Unread: </span>
               {convo.unreadCount > 9 ? "9+" : convo.unreadCount}
             </span>
           )}
@@ -97,14 +102,15 @@ function ConversationRow({
       </Link>
 
       {/* Action menu */}
-      <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
         <div className="relative">
           <button
             type="button"
             onClick={(e) => { e.preventDefault(); setShowMenu((v) => !v); }}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Conversation options"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            aria-label={`Conversation options for ${shortAddr(convo.peerAddress)}`}
             aria-expanded={showMenu}
+            aria-haspopup="true"
           >
             <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <circle cx="8" cy="3" r="1.2" />
@@ -123,10 +129,12 @@ function ConversationRow({
                 onClick={() => setShowMenu(false)}
                 tabIndex={-1}
               />
-              <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+              <div className="absolute right-0 top-8 z-20 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg" role="menu">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 focus:outline-none focus:bg-red-50"
+                  aria-label={`Delete conversation with ${shortAddr(convo.peerAddress)}`}
                   onClick={(e) => {
                     e.preventDefault();
                     setShowMenu(false);
@@ -154,6 +162,10 @@ export default function MessagesPage() {
   const { refreshUnread } = useMessaging();
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   const [search, setSearch] = useState("");
+  const [announcement, setAnnouncement] = useState("");
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const rowRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+  const prevUnreadRef = useRef<number | null>(null);
 
   const load = useCallback(() => {
     if (!wallet) return;
@@ -164,9 +176,23 @@ export default function MessagesPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const totalUnread = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+    if (prevUnreadRef.current !== null && totalUnread > prevUnreadRef.current) {
+      const unreadConvo = conversations.find((c) => c.unreadCount > 0);
+      if (unreadConvo) {
+        setAnnouncement(
+          `New message received from ${shortAddr(unreadConvo.peerAddress)}: ${unreadConvo.lastMessageSnippet || ""}`
+        );
+      }
+    }
+    prevUnreadRef.current = totalUnread;
+  }, [conversations]);
+
   const handleRefresh = useCallback(() => {
     load();
     refreshUnread();
+    setAnnouncement("Conversations refreshed");
   }, [load, refreshUnread]);
 
   function handleDelete(peerAddress: string) {
@@ -175,6 +201,7 @@ export default function MessagesPage() {
     deleteConversation(wallet, peerAddress);
     load();
     refreshUnread();
+    setAnnouncement(`Conversation with ${shortAddr(peerAddress)} deleted`);
   }
 
   const cleanSearch = sanitizePlainText(search, 100);
@@ -183,6 +210,22 @@ export default function MessagesPage() {
         c.peerAddress.toLowerCase().includes(cleanSearch.toLowerCase()),
       )
     : conversations;
+
+  const handleListKeyDown = (e: React.KeyboardEvent<HTMLUListElement>) => {
+    if (filtered.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const nextIndex = (focusedIndex + 1) % filtered.length;
+      setFocusedIndex(nextIndex);
+      rowRefs.current[nextIndex]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prevIndex = (focusedIndex - 1 + filtered.length) % filtered.length;
+      setFocusedIndex(prevIndex);
+      rowRefs.current[prevIndex]?.focus();
+    }
+  };
 
   // ── No wallet ─────────────────────────────────────────────────────────────
 
@@ -193,7 +236,7 @@ export default function MessagesPage() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-16 text-center">
           <p className="text-sm text-slate-600">Connect your wallet to view messages.</p>
           <button
-            className="mt-4 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700 transition-colors"
+            className="mt-4 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500"
             onClick={async () => {
               try { await connectWallet(); } catch { /* cancelled */ }
             }}
@@ -209,6 +252,7 @@ export default function MessagesPage() {
 
   return (
     <section className="mx-auto max-w-2xl space-y-5">
+      <AriaLiveRegion message={announcement} politeness="polite" />
       <PullToRefresh onRefresh={handleRefresh} label="Refresh conversations" />
 
       {/* Header */}
@@ -249,17 +293,25 @@ export default function MessagesPage() {
       {conversations.length === 0 ? (
         <EmptyInbox />
       ) : filtered.length === 0 ? (
-        <p className="py-10 text-center text-sm text-slate-500">
+        <p className="py-10 text-center text-sm text-slate-500" role="status">
           No conversations match &ldquo;{search}&rdquo;
         </p>
       ) : (
-        <ul className="space-y-2" aria-label="Conversations" aria-live="polite">
-          {filtered.map((convo) => (
+        <ul
+          role="list"
+          className="space-y-2"
+          aria-label="Conversations"
+          onKeyDown={handleListKeyDown}
+        >
+          {filtered.map((convo, idx) => (
             <ConversationRow
               key={convo.peerAddress}
               convo={convo}
               myAddress={wallet}
               onDelete={handleDelete}
+              linkRef={(el) => {
+                rowRefs.current[idx] = el;
+              }}
             />
           ))}
         </ul>

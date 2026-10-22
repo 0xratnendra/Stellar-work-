@@ -116,7 +116,7 @@ describe('Stellar-Specific Accessibility Patterns', () => {
       submitted_at: "0",
     };
     const { getByRole, getAllByRole, container } = render(<JobStatusTimeline job={sampleJob} />);
-    expect(getByRole("region", { name: /Job status timeline/i })).toBeInDOM();
+    expect(getByRole("region", { name: /Job status timeline/i })).toBeInTheDocument();
     const steps = getAllByRole("listitem");
     expect(steps.length).toBeGreaterThan(0);
     const results = await axe(container);

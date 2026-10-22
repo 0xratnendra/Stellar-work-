@@ -15,6 +15,7 @@ StellarWork is an open-source decentralized freelance marketplace on Stellar. Pa
 ```
 stellarwork
 ├── contracts/escrow
+├── contracts/retainer
 ├── frontend
 └── docs
 ```
@@ -283,6 +284,7 @@ For hosting the frontend on Vercel, Netlify, or Docker (plus production env conf
 For a command-only deployment reference, see `docs/testnet-deployment-guide.md`.
 For environment configuration, see `docs/environments.md`.
 For API reference, see `docs/CONTRACT.md`.
+For retainer contract reference, see `docs/retainer-reference.md`.
 For frontend architecture, see `docs/FRONTEND_ARCHITECTURE.md`.
 For third-party integration, see `docs/INTEGRATION.md`.
 

@@ -10,6 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import AriaLiveRegion from "@/components/AriaLiveRegion";
 import {
   NOOP,
   SWIPE_FULL_PX,
@@ -75,6 +76,13 @@ function subscribeToPointerType(onChange: () => void): () => void {
   return () => mediaQuery.removeEventListener?.("change", onChange);
 }
 
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof Element)) return false;
+  return Boolean(
+    target.closest("a, button, input, textarea, select, [role='button'], [role='menuitem'], [role='link']")
+  );
+}
+
 /**
  * Adds swipe quick-actions to a job card on mobile:
  *
@@ -84,7 +92,8 @@ function subscribeToPointerType(onChange: () => void): () => void {
  * - Springs animate the card back into place on release.
  * - Full swipes give haptic confirmation via the Vibration API.
  * - Tap-and-hold opens the same actions as a menu (accessibility fallback).
- * - Disabled entirely on fine-pointer (desktop) devices.
+ * - Keyboard and screen reader users can trigger actions via focusable toolbar and menu.
+ * - Disabled entirely on fine-pointer (desktop) devices unless enabled explicitly.
  */
 export default function SwipeableJobCard({
   jobId,
@@ -109,6 +118,7 @@ export default function SwipeableJobCard({
   const [offset, setOffset] = useState(0);
   const [pinnedSide, setPinnedSide] = useState<"left" | "right" | null>(null);
   const [holdMenuOpen, setHoldMenuOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
 
   const offsetRef = useRef(0);
   const springCancelRef = useRef<(() => void) | null>(null);
@@ -162,11 +172,18 @@ export default function SwipeableJobCard({
       setHoldMenuOpen(false);
       setPinnedSide(null);
       springTo(0);
-      if (action === "accept") onAccept();
-      else if (action === "bookmark") onBookmark();
-      else onCancel();
+      if (action === "accept") {
+        setAnnouncement(`Job #${jobId} accepted`);
+        onAccept();
+      } else if (action === "bookmark") {
+        setAnnouncement(`Job #${jobId} ${bookmarked ? "bookmark removed" : "bookmarked"}`);
+        onBookmark();
+      } else {
+        setAnnouncement(`Job #${jobId} cancelled`);
+        onCancel();
+      }
     },
-    [onAccept, onBookmark, onCancel, springTo],
+    [bookmarked, jobId, onAccept, onBookmark, onCancel, springTo],
   );
 
   const clearHoldTimer = useCallback(() => {
@@ -178,8 +195,13 @@ export default function SwipeableJobCard({
   }, []);
 
   const bind = useDrag(
-    ({ active, last, tap, movement: [mx], velocity: [vx], direction: [dx] }) => {
+    ({ active, last, tap, movement: [mx], velocity: [vx], direction: [dx], event }) => {
       if (disabled) return;
+
+      // Suppress swipe activation when drag starts inside an interactive child
+      if (event && isInteractiveTarget(event.target)) {
+        return;
+      }
 
       // A tap while pinned open collapses the revealed action.
       if (last && tap) {
@@ -234,6 +256,7 @@ export default function SwipeableJobCard({
   const handleHoldStart = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (disabled || event.pointerType === "mouse") return;
+      if (isInteractiveTarget(event.target)) return;
       holdStartRef.current = { x: event.clientX, y: event.clientY };
       holdTimerRef.current = window.setTimeout(() => {
         holdTriggeredRef.current = true;
@@ -314,6 +337,47 @@ export default function SwipeableJobCard({
       aria-label={`Job #${jobId} quick actions`}
       onKeyDown={handleKeyDown}
     >
+      <AriaLiveRegion message={announcement} politeness="polite" />
+
+      {/* Accessible keyboard toolbar (visible on focus-within) */}
+      <div
+        className="sr-only focus-within:not-sr-only focus-within:relative focus-within:z-30 focus-within:flex focus-within:items-center focus-within:gap-2 focus-within:rounded-t-lg focus-within:border focus-within:border-slate-200 focus-within:bg-slate-50 focus-within:p-2"
+        role="toolbar"
+        aria-label={`Quick actions for Job #${jobId}`}
+      >
+        {availability.canAccept && (
+          <button
+            type="button"
+            data-testid={`keyboard-accept-${jobId}`}
+            onClick={() => executeAction("accept")}
+            className="rounded bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+            aria-label={`Accept job #${jobId}`}
+          >
+            Accept job
+          </button>
+        )}
+        <button
+          type="button"
+          data-testid={`keyboard-bookmark-${jobId}`}
+          onClick={() => executeAction("bookmark")}
+          className="rounded bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label={`${bookmarked ? "Remove bookmark for" : "Bookmark"} job #${jobId}`}
+        >
+          {bookmarked ? "Remove bookmark" : "Bookmark job"}
+        </button>
+        {availability.canCancel && (
+          <button
+            type="button"
+            data-testid={`keyboard-cancel-${jobId}`}
+            onClick={() => executeAction("cancel")}
+            className="rounded bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+            aria-label={`Cancel job #${jobId}`}
+          >
+            Cancel job
+          </button>
+        )}
+      </div>
+
       {/* Action layer revealed underneath the sliding card. */}
       <div
         className="absolute inset-0 flex items-stretch justify-between overflow-hidden rounded-lg"
@@ -358,6 +422,19 @@ export default function SwipeableJobCard({
         </button>
       </div>
 
+      {/* Overflow menu button for keyboard / assistive tech */}
+      <button
+        type="button"
+        data-testid={`swipe-overflow-${jobId}`}
+        aria-label={`Quick actions menu for Job #${jobId}`}
+        aria-haspopup="menu"
+        aria-expanded={holdMenuOpen}
+        onClick={() => setHoldMenuOpen((v) => !v)}
+        className="sr-only focus:not-sr-only focus:absolute focus:right-2 focus:top-2 focus:z-30 focus:rounded-md focus:bg-white focus:px-2.5 focus:py-1 focus:text-xs focus:font-semibold focus:text-slate-800 focus:shadow-md focus:ring-2 focus:ring-slate-500"
+      >
+        Actions for Job #{jobId}
+      </button>
+
       {/* The sliding card itself. */}
       <div
         {...bind()}
@@ -378,7 +455,7 @@ export default function SwipeableJobCard({
         {children}
       </div>
 
-      {/* Tap-and-hold actions menu (accessibility fallback). */}
+      {/* Tap-and-hold / overflow actions menu (accessibility fallback). */}
       {holdMenuOpen && (
         <>
           <button
@@ -397,7 +474,7 @@ export default function SwipeableJobCard({
               <button
                 type="button"
                 role="menuitem"
-                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-green-700 hover:bg-green-50"
+                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-green-700 hover:bg-green-50 focus:outline-none focus:bg-green-50"
                 onClick={() => executeAction("accept")}
               >
                 Accept job
@@ -406,7 +483,7 @@ export default function SwipeableJobCard({
             <button
               type="button"
               role="menuitem"
-              className="block w-full px-4 py-2.5 text-left text-sm font-medium text-blue-700 hover:bg-blue-50"
+              className="block w-full px-4 py-2.5 text-left text-sm font-medium text-blue-700 hover:bg-blue-50 focus:outline-none focus:bg-blue-50"
               onClick={() => executeAction("bookmark")}
             >
               {bookmarked ? "Remove bookmark" : "Bookmark job"}
@@ -415,7 +492,7 @@ export default function SwipeableJobCard({
               <button
                 type="button"
                 role="menuitem"
-                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-red-700 hover:bg-red-50"
+                className="block w-full px-4 py-2.5 text-left text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:bg-red-50"
                 onClick={() => executeAction("cancel")}
               >
                 Cancel job

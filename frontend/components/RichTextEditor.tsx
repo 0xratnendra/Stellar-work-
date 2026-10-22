@@ -4,7 +4,9 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
+import AriaLiveRegion from "@/components/AriaLiveRegion";
+import { useModalFocusTrap } from "@/lib/modal";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -31,18 +33,33 @@ interface ToolbarButtonProps {
   active?: boolean;
   disabled?: boolean;
   title: string;
+  tabIndex: number;
+  onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
+  buttonRef?: (el: HTMLButtonElement | null) => void;
   children: React.ReactNode;
 }
 
-function ToolbarButton({ onClick, active, disabled, title, children }: ToolbarButtonProps) {
+function ToolbarButton({
+  onClick,
+  active,
+  disabled,
+  title,
+  tabIndex,
+  onKeyDown,
+  buttonRef,
+  children,
+}: ToolbarButtonProps) {
   return (
     <button
+      ref={buttonRef}
       type="button"
+      tabIndex={tabIndex}
+      onKeyDown={onKeyDown}
       onMouseDown={(e) => {
         // Prevent editor from losing focus on toolbar click
         e.preventDefault();
-        onClick();
       }}
+      onClick={onClick}
       disabled={disabled}
       title={title}
       aria-label={title}
@@ -91,6 +108,15 @@ export default function RichTextEditor({
   labelId,
   required,
 }: RichTextEditorProps) {
+  const [announcement, setAnnouncement] = useState("");
+  const [focusedToolbarIndex, setFocusedToolbarIndex] = useState(0);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkInputError, setLinkInputError] = useState("");
+  const linkModalRef = useRef<HTMLDivElement>(null);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const toolbarButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -102,6 +128,7 @@ export default function RichTextEditor({
         blockquote: false,
         horizontalRule: false,
         strike: false,
+        link: false,
       }),
       Link.configure({
         openOnClick: false,
@@ -128,8 +155,8 @@ export default function RichTextEditor({
         "aria-multiline": "true",
         ...(required ? { "aria-required": "true" } : {}),
         ...(error ? { "aria-invalid": "true" } : {}),
-        ...(errorId ? { "aria-describedby": errorId } : {}),
-        ...(labelId ? { "aria-labelledby": labelId } : {}),
+        "aria-describedby": [errorId, "rich-text-editor-instructions"].filter(Boolean).join(" "),
+        ...(labelId ? { "aria-labelledby": labelId } : { "aria-label": "Job description" }),
         class: [
           "min-h-[9rem] w-full px-3 py-2 text-sm text-slate-900 outline-none",
           "prose prose-sm max-w-none",
@@ -152,26 +179,109 @@ export default function RichTextEditor({
     if (!editor) return;
     const current = editor.isEmpty ? "" : editor.getHTML();
     if (current !== value) {
-      // setContent re-renders the editor; only do it when content truly differs
       editor.commands.setContent(value || "", { emitUpdate: false });
     }
   }, [editor, value]);
 
+  // Modal focus trap for link dialog
+  useModalFocusTrap(linkModalOpen, linkModalRef, () => setLinkModalOpen(false), {
+    initialFocusRef: linkInputRef,
+  });
+
+  // ── Toolbar keyboard navigation (Roving Tabindex) ───────────────────────────
+  const TOTAL_TOOLBAR_BUTTONS = 6;
+
+  const handleToolbarKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+      let nextIndex = index;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        nextIndex = (index + 1) % TOTAL_TOOLBAR_BUTTONS;
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        nextIndex = (index - 1 + TOTAL_TOOLBAR_BUTTONS) % TOTAL_TOOLBAR_BUTTONS;
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        nextIndex = 0;
+      } else if (e.key === "End") {
+        e.preventDefault();
+        nextIndex = TOTAL_TOOLBAR_BUTTONS - 1;
+      } else {
+        return;
+      }
+      setFocusedToolbarIndex(nextIndex);
+      toolbarButtonsRef.current[nextIndex]?.focus();
+    },
+    [],
+  );
+
+  // ── Formatting actions with announcements ──────────────────────────────────
+  const toggleHeadingAction = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().toggleHeading({ level: 2 }).run();
+    const isActive = editor.isActive("heading", { level: 2 });
+    setAnnouncement(isActive ? "Heading level 2 applied" : "Heading level 2 removed");
+  }, [editor]);
+
+  const toggleBoldAction = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().toggleBold().run();
+    const isActive = editor.isActive("bold");
+    setAnnouncement(isActive ? "Bold formatting enabled" : "Bold formatting disabled");
+  }, [editor]);
+
+  const toggleItalicAction = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().toggleItalic().run();
+    const isActive = editor.isActive("italic");
+    setAnnouncement(isActive ? "Italic formatting enabled" : "Italic formatting disabled");
+  }, [editor]);
+
+  const toggleBulletListAction = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().toggleBulletList().run();
+    const isActive = editor.isActive("bulletList");
+    setAnnouncement(isActive ? "Bullet list inserted" : "Bullet list removed");
+  }, [editor]);
+
+  const toggleOrderedListAction = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().toggleOrderedList().run();
+    const isActive = editor.isActive("orderedList");
+    setAnnouncement(isActive ? "Numbered list inserted" : "Numbered list removed");
+  }, [editor]);
+
   // ── Link helpers ────────────────────────────────────────────────────────────
-  const setLink = useCallback(() => {
+  const openLinkDialog = useCallback(() => {
     if (!editor) return;
     const previous = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Enter URL (must start with https://)", previous ?? "https://");
-    if (url === null) return; // cancelled
-    if (url === "") {
+    setLinkUrl(previous ?? "https://");
+    setLinkInputError("");
+    setLinkModalOpen(true);
+  }, [editor]);
+
+  const applyLink = useCallback(() => {
+    if (!editor) return;
+    if (!linkUrl || linkUrl.trim() === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      setAnnouncement("Link removed");
+      setLinkModalOpen(false);
       return;
     }
-    if (!/^https?:\/\//i.test(url)) {
-      alert("Only http:// and https:// links are allowed.");
+    if (!/^https?:\/\//i.test(linkUrl)) {
+      setLinkInputError("URL must start with http:// or https://");
       return;
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    editor.chain().focus().extendMarkRange("link").setLink({ href: linkUrl }).run();
+    setAnnouncement("Link applied");
+    setLinkModalOpen(false);
+  }, [editor, linkUrl]);
+
+  const removeLink = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    setAnnouncement("Link removed");
+    setLinkModalOpen(false);
   }, [editor]);
 
   // ── Byte / char accounting ───────────────────────────────────────────────────
@@ -185,18 +295,27 @@ export default function RichTextEditor({
 
   return (
     <div className="space-y-1">
+      <AriaLiveRegion message={announcement} politeness="polite" />
+
+      <p id="rich-text-editor-instructions" className="sr-only">
+        Rich text editor. Use Ctrl+B for bold, Ctrl+I for italic. Navigate toolbar using left and right arrow keys. Press Shift+Tab from editor to reach formatting toolbar.
+      </p>
+
       {/* Toolbar */}
       <div
         className="flex flex-wrap items-center gap-0.5 rounded-t-md border border-b-0 border-slate-300 bg-slate-50 px-1.5 py-1"
         role="toolbar"
-        aria-label="Text formatting"
+        aria-label="Text formatting toolbar"
         aria-controls="rich-text-editor-content"
       >
         {/* Headings */}
         <ToolbarButton
-          title="Heading"
+          buttonRef={(el) => { toolbarButtonsRef.current[0] = el; }}
+          tabIndex={focusedToolbarIndex === 0 ? 0 : -1}
+          onKeyDown={(e) => handleToolbarKeyDown(e, 0)}
+          title="Heading level 2"
           active={editor.isActive("heading", { level: 2 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          onClick={toggleHeadingAction}
         >
           H
         </ToolbarButton>
@@ -205,16 +324,22 @@ export default function RichTextEditor({
 
         {/* Inline marks */}
         <ToolbarButton
+          buttonRef={(el) => { toolbarButtonsRef.current[1] = el; }}
+          tabIndex={focusedToolbarIndex === 1 ? 0 : -1}
+          onKeyDown={(e) => handleToolbarKeyDown(e, 1)}
           title="Bold (Ctrl+B)"
           active={editor.isActive("bold")}
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          onClick={toggleBoldAction}
         >
           <strong>B</strong>
         </ToolbarButton>
         <ToolbarButton
+          buttonRef={(el) => { toolbarButtonsRef.current[2] = el; }}
+          tabIndex={focusedToolbarIndex === 2 ? 0 : -1}
+          onKeyDown={(e) => handleToolbarKeyDown(e, 2)}
           title="Italic (Ctrl+I)"
           active={editor.isActive("italic")}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
+          onClick={toggleItalicAction}
         >
           <em>I</em>
         </ToolbarButton>
@@ -223,9 +348,12 @@ export default function RichTextEditor({
 
         {/* Lists */}
         <ToolbarButton
+          buttonRef={(el) => { toolbarButtonsRef.current[3] = el; }}
+          tabIndex={focusedToolbarIndex === 3 ? 0 : -1}
+          onKeyDown={(e) => handleToolbarKeyDown(e, 3)}
           title="Bullet list"
           active={editor.isActive("bulletList")}
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          onClick={toggleBulletListAction}
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <circle cx="2" cy="4" r="1.5" />
@@ -237,9 +365,12 @@ export default function RichTextEditor({
           </svg>
         </ToolbarButton>
         <ToolbarButton
+          buttonRef={(el) => { toolbarButtonsRef.current[4] = el; }}
+          tabIndex={focusedToolbarIndex === 4 ? 0 : -1}
+          onKeyDown={(e) => handleToolbarKeyDown(e, 4)}
           title="Numbered list"
           active={editor.isActive("orderedList")}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          onClick={toggleOrderedListAction}
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <text x="0" y="5" fontSize="6" fontFamily="sans-serif">1.</text>
@@ -255,9 +386,12 @@ export default function RichTextEditor({
 
         {/* Link */}
         <ToolbarButton
-          title="Insert / edit link"
+          buttonRef={(el) => { toolbarButtonsRef.current[5] = el; }}
+          tabIndex={focusedToolbarIndex === 5 ? 0 : -1}
+          onKeyDown={(e) => handleToolbarKeyDown(e, 5)}
+          title="Insert or edit link"
           active={editor.isActive("link")}
-          onClick={setLink}
+          onClick={openLinkDialog}
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
             <path d="M6.5 9.5a4.5 4.5 0 0 0 6.364 0l1.5-1.5a4.5 4.5 0 0 0-6.364-6.364L7.172 3" strokeLinecap="round" />
@@ -309,6 +443,81 @@ export default function RichTextEditor({
           style={{ width: `${pct}%` }}
         />
       </div>
+
+      {/* Accessible link dialog */}
+      {linkModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs"
+            aria-hidden="true"
+            onClick={() => setLinkModalOpen(false)}
+          />
+          <div
+            ref={linkModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Insert or edit link"
+            className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4"
+          >
+            <h3 className="text-sm font-semibold text-slate-900">Insert / Edit Link</h3>
+            <div>
+              <label htmlFor="editor-link-input" className="block text-xs font-medium text-slate-700 mb-1">
+                Link URL
+              </label>
+              <input
+                ref={linkInputRef}
+                id="editor-link-input"
+                type="url"
+                value={linkUrl}
+                onChange={(e) => {
+                  setLinkUrl(e.target.value);
+                  setLinkInputError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    applyLink();
+                  }
+                }}
+                placeholder="https://example.com"
+                className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                aria-describedby={linkInputError ? "editor-link-error" : undefined}
+                aria-invalid={Boolean(linkInputError)}
+              />
+              {linkInputError && (
+                <p id="editor-link-error" className="mt-1 text-xs text-red-600" role="alert">
+                  {linkInputError}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              {editor.isActive("link") && (
+                <button
+                  type="button"
+                  onClick={removeLink}
+                  className="mr-auto rounded-md px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400"
+                >
+                  Remove link
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(false)}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyLink}
+                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
