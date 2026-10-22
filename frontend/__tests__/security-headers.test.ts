@@ -28,6 +28,8 @@ describe("Security Headers Configuration", () => {
       expect(cspValue).toContain("style-src 'self'");
       expect(cspValue).toContain("connect-src");
       expect(cspValue).toContain("frame-ancestors 'none'");
+      expect(cspValue).toContain("report-uri /api/csp-report");
+      expect(cspValue).toContain("report-to csp-endpoint");
 
       // Assert no unsafe keywords appear in the emitted policy
       expect(cspValue).not.toContain("'unsafe-inline'");
@@ -42,6 +44,54 @@ describe("Security Headers Configuration", () => {
       expect(headersMap.get("Strict-Transport-Security")).toBe(
         "max-age=63072000; includeSubDomains; preload",
       );
+
+      // Verify Reporting headers
+      expect(headersMap.get("Report-To")).toBeDefined();
+      expect(headersMap.get("Reporting-Endpoints")).toBe(
+        'csp-endpoint="/api/csp-report"',
+      );
+    }
+  });
+
+  it("does not contain bare https: or wss: wildcards in connect-src or img-src", async () => {
+    if (typeof nextConfig.headers === "function") {
+      const headersConfig = await nextConfig.headers();
+      const globalRouteHeaders = headersConfig.find(
+        (item) => item.source === "/:path*",
+      );
+      const headersMap = new Map(
+        globalRouteHeaders?.headers.map((h) => [h.key, h.value]),
+      );
+      const cspValue =
+        headersMap.get("Content-Security-Policy") ||
+        headersMap.get("Content-Security-Policy-Report-Only");
+
+      expect(cspValue).toBeDefined();
+      const directives = cspValue!.split(";").map((d) => d.trim());
+
+      const connectSrc = directives.find((d) => d.startsWith("connect-src"));
+      expect(connectSrc).toBeDefined();
+      const connectTokens = connectSrc!.split(/\s+/);
+      expect(connectTokens).not.toContain("https:");
+      expect(connectTokens).not.toContain("wss:");
+
+      const imgSrc = directives.find((d) => d.startsWith("img-src"));
+      expect(imgSrc).toBeDefined();
+      const imgTokens = imgSrc!.split(/\s+/);
+      expect(imgTokens).not.toContain("https:");
+      expect(imgTokens).not.toContain("wss:");
+    }
+  });
+
+  it("restricts images remotePatterns to explicit allowlists", () => {
+    expect(nextConfig.images).toBeDefined();
+    const patterns = nextConfig.images?.remotePatterns;
+    expect(patterns).toBeDefined();
+    expect(patterns?.length).toBeGreaterThan(0);
+
+    for (const pattern of patterns || []) {
+      expect(pattern.hostname).not.toBe("**");
+      expect(pattern.protocol).toBe("https");
     }
   });
 

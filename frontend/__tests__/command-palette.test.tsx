@@ -31,19 +31,80 @@ describe("Command palette interactions", () => {
   it("opens and closes with keyboard shortcuts", () => {
     render(<CommandPalette />);
 
-    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Command palette" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "k", metaKey: true });
-    expect(screen.getByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Command palette" }),
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Command palette" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens immediately when mounted after the first shortcut", () => {
     render(<CommandPalette initialOpen />);
 
-    expect(screen.getByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Command palette" }),
+    ).toBeInTheDocument();
+  });
+
+  it("has accessible combobox and listbox ARIA attributes", () => {
+    render(<CommandPalette initialOpen />);
+
+    const combobox = screen.getByRole("combobox", { name: "Search commands" });
+    expect(combobox).toBeInTheDocument();
+    expect(combobox).toHaveAttribute("aria-expanded", "true");
+    expect(combobox).toHaveAttribute(
+      "aria-controls",
+      "command-palette-results",
+    );
+    expect(combobox).toHaveAttribute("aria-autocomplete", "list");
+
+    const listbox = screen.getByRole("listbox", { name: "Commands" });
+    expect(listbox).toBeInTheDocument();
+    expect(listbox).toHaveAttribute("id", "command-palette-results");
+
+    const activeId = combobox.getAttribute("aria-activedescendant");
+    expect(activeId).toBeTruthy();
+
+    const activeOption = document.getElementById(activeId!);
+    expect(activeOption).toBeInTheDocument();
+    expect(activeOption).toHaveAttribute("aria-selected", "true");
+
+    const statusLiveRegion = screen.getByRole("status");
+    expect(statusLiveRegion).toHaveAttribute("aria-live", "polite");
+    expect(statusLiveRegion.textContent).toMatch(/commands found/i);
+  });
+
+  it("supports Home, End, and Arrow key navigation", () => {
+    render(<CommandPalette initialOpen />);
+
+    const combobox = screen.getByRole("combobox", { name: "Search commands" });
+
+    // Move to end with End key
+    fireEvent.keyDown(document, { key: "End" });
+    const endActiveId = combobox.getAttribute("aria-activedescendant");
+    expect(
+      document.getElementById(endActiveId!)?.getAttribute("aria-selected"),
+    ).toBe("true");
+
+    // Move to start with Home key
+    fireEvent.keyDown(document, { key: "Home" });
+    const homeActiveId = combobox.getAttribute("aria-activedescendant");
+    expect(
+      document.getElementById(homeActiveId!)?.getAttribute("aria-selected"),
+    ).toBe("true");
+
+    // Move down with ArrowDown
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    const nextActiveId = combobox.getAttribute("aria-activedescendant");
+    expect(nextActiveId).not.toBe(homeActiveId);
   });
 
   it("filters commands by search query", () => {
@@ -51,12 +112,20 @@ describe("Command palette interactions", () => {
 
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
 
-    const searchInput = screen.getByRole("searchbox", { name: "Search commands" });
+    const searchInput = screen.getByRole("combobox", {
+      name: "Search commands",
+    });
     fireEvent.change(searchInput, { target: { value: "dashboard" } });
 
-    expect(screen.getByRole("option", { name: "Go to Dashboard" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Go to Jobs" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Post Job" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Go to Dashboard" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Go to Jobs" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Post Job" }),
+    ).not.toBeInTheDocument();
   });
 
   it("executes the selected command action", () => {
@@ -66,7 +135,9 @@ describe("Command palette interactions", () => {
     fireEvent.click(screen.getByRole("option", { name: "Post Job" }));
 
     expect(mockPush).toHaveBeenCalledWith("/post-job");
-    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Command palette" }),
+    ).not.toBeInTheDocument();
   });
 
   it("runs connect wallet action when selected", () => {
@@ -76,7 +147,9 @@ describe("Command palette interactions", () => {
     fireEvent.click(screen.getByRole("option", { name: "Connect Wallet" }));
 
     expect(mockConnectWallet).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Command palette" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes confirmation dialogs with Escape and confirms with Enter", () => {
@@ -108,8 +181,14 @@ describe("Command palette interactions", () => {
 
     fireEvent.keyDown(window, { key: "?" });
 
-    expect(screen.getByRole("dialog", { name: /keyboard shortcuts/i })).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: /keyboard shortcut overview/i })).toBeInTheDocument();
-    expect(screen.getByText("Submit form or confirm action")).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: /keyboard shortcuts/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: /keyboard shortcut overview/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Submit form or confirm action"),
+    ).toBeInTheDocument();
   });
 });

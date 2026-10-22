@@ -56,7 +56,7 @@ groups:
           team: platform
         annotations:
           summary: p95 contract transaction latency above 20s
-          description: Soroban invocations are slow — likely RPC congestion or network issues.
+          description: Soroban invocations are slow â€” likely RPC congestion or network issues.
 
       - alert: RpcErrorSpike
         expr: sum(rate(stellarwork_rpc_errors_total[5m])) > 0.5
@@ -146,3 +146,17 @@ groups:
           description: >-
             Server-side HTTP request processing at p95 exceeds 3 seconds.
             Investigate slow API routes or upstream Stellar RPC latency.
+
+  - name: stellarwork-security
+    rules:
+      - alert: CspViolationSpike
+        expr: sum(rate(stellarwork_csp_violations_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: Elevated Content Security Policy violation rate
+          description: >-
+            {{ $value | printf "%.2f" }} CSP violations/sec over the last 5
+            minutes. Check directive and blocked_uri in metrics or CSP reports.
