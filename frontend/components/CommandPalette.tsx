@@ -29,7 +29,11 @@ function fuzzyMatch(query: string, text: string): boolean {
   return false;
 }
 
-export default function CommandPalette({ initialOpen = false }: { initialOpen?: boolean }) {
+export default function CommandPalette({
+  initialOpen = false,
+}: {
+  initialOpen?: boolean;
+}) {
   const router = useRouter();
   const { wallet, connectWallet } = useWallet();
   const [open, setOpen] = useState(initialOpen);
@@ -45,8 +49,8 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
       if (stored) {
         setRecentIds(JSON.parse(stored));
       }
-    } catch (e) {
-      
+    } catch {
+      // ignore storage errors
     }
   }, []);
 
@@ -179,17 +183,19 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
 
   const filteredCommands = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    
+
     if (!normalized) {
-      
-      const recent = commands.filter((c) => recentIds.includes(c.id))
+      const recent = commands
+        .filter((c) => recentIds.includes(c.id))
         .sort((a, b) => recentIds.indexOf(a.id) - recentIds.indexOf(b.id));
       const others = commands.filter((c) => !recentIds.includes(c.id));
       return [...recent, ...others];
     }
 
     return commands.filter((command) => {
-      const haystack = [command.label, ...command.keywords].join(" ").toLowerCase();
+      const haystack = [command.label, ...command.keywords]
+        .join(" ")
+        .toLowerCase();
       return fuzzyMatch(normalized, haystack);
     });
   }, [commands, query, recentIds]);
@@ -203,11 +209,14 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
     (command: CommandItem) => {
       command.run();
       setRecentIds((prev) => {
-        const newRecent = [command.id, ...prev.filter((id) => id !== command.id)].slice(0, 5);
+        const newRecent = [
+          command.id,
+          ...prev.filter((id) => id !== command.id),
+        ].slice(0, 5);
         try {
           localStorage.setItem(RECENT_COMMANDS_KEY, JSON.stringify(newRecent));
-        } catch (e) {
-          
+        } catch {
+          // ignore storage errors
         }
         return newRecent;
       });
@@ -216,7 +225,7 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
     [close],
   );
 
-  useModalFocusTrap(open, dialogRef, close);
+  useModalFocusTrap(open, dialogRef, close, { initialFocusRef: inputRef });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -249,15 +258,24 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
             ? 0
             : (current - 1 + filteredCommands.length) % filteredCommands.length,
         );
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        setSelectedIndex(0);
+      } else if (event.key === "End") {
+        event.preventDefault();
+        setSelectedIndex(Math.max(0, filteredCommands.length - 1));
       } else if (event.key === "Enter" && filteredCommands[selectedIndex]) {
         event.preventDefault();
         executeCommand(filteredCommands[selectedIndex]);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        close();
       }
     };
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [executeCommand, filteredCommands, open, selectedIndex]);
+  }, [close, executeCommand, filteredCommands, open, selectedIndex]);
 
   useEffect(() => {
     if (open) {
@@ -268,6 +286,10 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
   if (!open) {
     return null;
   }
+
+  const activeOptionId = filteredCommands[selectedIndex]
+    ? `command-option-${filteredCommands[selectedIndex].id}`
+    : undefined;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[15vh] backdrop-blur-sm">
@@ -283,6 +305,12 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
           <input
             ref={inputRef}
             type="search"
+            role="combobox"
+            aria-expanded="true"
+            aria-haspopup="listbox"
+            aria-controls="command-palette-results"
+            aria-autocomplete="list"
+            aria-activedescendant={activeOptionId}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -293,23 +321,49 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
             className="w-full border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
           />
         </div>
-        <ul role="listbox" aria-label="Commands" className="max-h-72 overflow-y-auto py-2">
+
+        {/* Accessible live region for announcing match count to screen readers */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {filteredCommands.length === 0
+            ? "No matching commands."
+            : `${filteredCommands.length} command${filteredCommands.length === 1 ? "" : "s"} found.`}
+        </div>
+
+        <ul
+          id="command-palette-results"
+          role="listbox"
+          aria-label="Commands"
+          className="max-h-72 overflow-y-auto py-2"
+        >
           {filteredCommands.length === 0 ? (
-            <li className="px-4 py-3 text-sm text-slate-500">No matching commands.</li>
+            <li
+              role="presentation"
+              className="px-4 py-3 text-sm text-slate-500"
+            >
+              No matching commands.
+            </li>
           ) : (
             filteredCommands.map((command, index) => {
+              const optionId = `command-option-${command.id}`;
               const isRecent = !query && recentIds.includes(command.id);
+              const isSelected = index === selectedIndex;
               return (
                 <li key={command.id} role="presentation">
                   <button
+                    id={optionId}
                     type="button"
                     role="option"
                     aria-label={command.label}
-                    aria-selected={index === selectedIndex}
+                    aria-selected={isSelected}
                     onMouseEnter={() => setSelectedIndex(index)}
                     onClick={() => executeCommand(command)}
                     className={`flex w-full items-center px-4 py-2.5 text-left text-sm ${
-                      index === selectedIndex
+                      isSelected
                         ? "bg-slate-100 text-slate-900"
                         : "text-slate-700 hover:bg-slate-50"
                     }`}
@@ -333,13 +387,22 @@ export default function CommandPalette({ initialOpen = false }: { initialOpen?: 
         </ul>
         <div className="flex items-center gap-4 border-t border-slate-100 px-4 py-2 text-[10px] text-slate-400">
           <span>
-            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-medium">↑↓</kbd> navigate
+            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-medium">
+              ↑↓
+            </kbd>{" "}
+            navigate
           </span>
           <span>
-            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-medium">↵</kbd> select
+            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-medium">
+              ↵
+            </kbd>{" "}
+            select
           </span>
           <span>
-            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-medium">esc</kbd> close
+            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-medium">
+              esc
+            </kbd>{" "}
+            close
           </span>
         </div>
       </div>
