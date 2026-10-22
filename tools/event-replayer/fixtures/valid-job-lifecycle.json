@@ -1,0 +1,48 @@
+{
+  "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+  "network": "testnet",
+  "start_time": "2026-10-01T00:00:00Z",
+  "end_time": "2026-10-05T00:00:00Z",
+  "events": [
+    {
+      "timestamp": "2026-10-01T10:00:00Z",
+      "event_type": "job_created",
+      "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+      "topic": ["job_created"],
+      "data": {
+        "job_id": 101,
+        "amount": 2500000000
+      }
+    },
+    {
+      "timestamp": "2026-10-02T14:30:00Z",
+      "event_type": "job_accepted",
+      "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+      "topic": ["job_accepted"],
+      "data": {
+        "job_id": 101,
+        "freelancer": "GBZXN7PIRZGNMHGA728R46OHAZSEINQU2Y2355GY25WUVFYZQGASB5ES"
+      }
+    },
+    {
+      "timestamp": "2026-10-03T09:15:00Z",
+      "event_type": "job_submitted",
+      "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+      "topic": ["job_submitted"],
+      "data": {
+        "job_id": 101
+      }
+    },
+    {
+      "timestamp": "2026-10-04T16:45:00Z",
+      "event_type": "job_approved",
+      "contract_id": "CA3D5KRYMCMUZTLSGKQ2XB5T2M2UHY445NXNTBXA4F4ZZY622Q567KJK",
+      "topic": ["job_approved"],
+      "data": {
+        "job_id": 101,
+        "payout": 2425000000,
+        "fee": 75000000
+      }
+    }
+  ]
+}

@@ -5,9 +5,11 @@ A tool for fetching historical contract events from Stellar RPC and replaying th
 ## Features
 
 - Fetch historical contract events from Stellar RPC `getEvents`
+- Offline deterministic replay mode using committed JSON fixtures
 - Parse and order events chronologically
 - Replay events against a local Soroban test environment
 - Verify final contract state matches expected values
+- Loud failure when encountering unknown or malformed event types
 - Configuration for event filters (by contract ID, event type, date range)
 - Output summary report: events processed, state transitions, final balances
 - Generate sample replay datasets from testnet activity
@@ -20,6 +22,34 @@ cargo build --release
 ```
 
 ## Usage
+
+### Offline Replay Mode (CI & Local Testing)
+
+Replay events from a fixture file offline without network RPC access:
+
+```bash
+cargo run --release -- --offline --input fixtures/valid-job-lifecycle.json --output replayed.json
+```
+
+Run the fixture test suite:
+
+```bash
+cargo test
+```
+
+### Refreshing Fixtures
+
+When escrow contract event layouts or topic names are intentionally updated:
+1. Capture new event traces from testnet:
+   ```bash
+   cargo run --release -- \
+     --rpc-url https://soroban-testnet.stellar.org \
+     --contract-id <CONTRACT_ID> \
+     --output fixtures/valid-job-lifecycle.json
+   ```
+2. Verify the captured JSON schema against `ReplayDataset` in `src/lib.rs`.
+3. Update unit and integration tests in `tests/replayer_tests.rs` to validate newly supported topics.
+4. Commit updated fixture files to version control.
 
 ### Generate Sample Dataset
 
@@ -118,34 +148,8 @@ The tool generates two files:
 
 ## CI Integration
 
-Add replay tests to CI pipeline (weekly or on-demand):
-
-```yaml
-# .github/workflows/event-replay.yml
-name: Event Replay Test
-on:
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly
-  workflow_dispatch:
-
-jobs:
-  replay:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Build event replayer
-        run: cd tools/event-replayer && cargo build --release
-      - name: Generate sample dataset
-        run: cargo run --release -- --sample --output sample.json
-      - name: Run replay
-        run: cargo run --release -- --output sample.json
-```
-
-## Documentation
-
-For more information on generating and using replay data for testing, see the main project documentation.
+Offline fixture replay tests run in CI on every push and pull request touching `tools/event-replayer/**` or `contracts/escrow/**` via `.github/workflows/event-replayer.yml`.
 
 ## License
 
 MIT
-<arg_value><arg_key>EmptyFile</arg_key><arg_value>false

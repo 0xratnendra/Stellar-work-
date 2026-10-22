@@ -73,6 +73,9 @@ const nextConfig: NextConfig = {
 
     const cspDirectives = [
       "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self'",
+      "img-src 'self' data: blob: https:",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       `img-src ${imgSrcDirectives}`,
